@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Flappy Diwali Tennis - Hot-Potato & Arcade Bouncing</title>
+  <!-- Art-directed Indian Royal & Modern Festive Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="game-wrapper">
+    <!-- Top Header Bar / Scoreboard -->
+    <header class="game-header">
+      <div class="logo-area">
+        <span class="tennis-icon">🪔</span>
+        <div class="logo-text">
+          <h1 class="game-title">FLAPPY DIWALI TENNIS</h1>
+          <span class="tagline">ROYAL FESTIVAL EDITION</span>
+        </div>
+      </div>
+
+      <div class="scoreboard">
+        <div class="score-card p1-card">
+          <span class="player-tag">PLAYER 1</span>
+          <span class="score-value" id="scoreP1">0</span>
+        </div>
+        <div class="vs-divider">❖</div>
+        <div class="score-card p2-card">
+          <span class="player-tag" id="p2ScoreLabel">CPU</span>
+          <span class="score-value" id="scoreP2">0</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button id="btnToggleAudio" class="icon-button" title="Toggle Sound">🔊 Audio On</button>
+      </div>
+    </header>
+
+    <!-- Main Canvas Arena -->
+    <div class="canvas-container">
+      <canvas id="courtCanvas"></canvas>
+
+      <!-- On-Screen Touch / Click Buttons (Mobile & Tablet Friendly) -->
+      <div class="touch-controls-overlay">
+        <button id="btnTapP1" class="touch-jump-btn touch-p1">
+          <span class="touch-btn-key">[ W / Tap ]</span>
+          <span class="touch-btn-label">P1 JUMP</span>
+        </button>
+        <button id="btnTapP2" class="touch-jump-btn touch-p2">
+          <span class="touch-btn-key">[ ▲ / Tap ]</span>
+          <span class="touch-btn-label">P2 JUMP</span>
+        </button>
+      </div>
+
+      <!-- Main Menu Overlay -->
+      <div id="menuOverlay" class="screen-overlay">
+        <div class="overlay-card diwali-card">
+          <div class="card-marigold-trim"></div>
+          <div class="hero-badge">🪔 DIWALI GRAND FESTIVAL 🪔</div>
+          <h2>FLAPPY DIWALI TENNIS</h2>
+          <p class="subtitle">Vertical impulse tennis with 1.5× energetic arcade rebounds, centered super-shot target zones, straight cylindrical handles, and a 10-second Rocket-to-Bomb sudden death!</p>
+
+          <div class="mode-select-group">
+            <span class="group-label">SELECT GAME MODE</span>
+            <div class="mode-buttons">
+              <button id="btnModePvC" class="mode-btn active">
+                <span class="mode-icon">🤖</span>
+                <span class="mode-text">
+                  <strong>Player vs Computer</strong>
+                  <small>Tactical AI tracks rockets & dodges bombs</small>
+                </span>
+              </button>
+              <button id="btnModePvP" class="mode-btn">
+                <span class="mode-icon">👥</span>
+                <span class="mode-text">
+                  <strong>Player vs Player</strong>
+                  <small>2 players on the same device</small>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div class="rules-summary diwali-rules">
+            <div class="rule-col">
+              <strong>🚀 10s Rocket Phase</strong>
+              <span>Rally the rocket! Jump to serve. 1.5× arcade ground & ceiling rebounds keep the rocket alive.</span>
+            </div>
+            <div class="rule-col">
+              <strong>💣 Sudden-Death Bomb</strong>
+              <span>At 0s, rocket turns into a speeding bomb. Touching it loses; dodge it to win the point!</span>
+            </div>
+            <div class="rule-col">
+              <strong>⚡ Super-Shot Target Zone</strong>
+              <span>Hit the luminous target zone on strings for a fast super-shot return.</span>
+            </div>
+            <div class="rule-col">
+              <strong>🎮 Controls</strong>
+              <span>P1: [ W ] / Space / Tap Left &nbsp;|&nbsp; P2: [ ▲ ] / Enter / Tap Right</span>
+            </div>
+          </div>
+
+          <button id="btnStartMatch" class="btn-primary start-btn">PLAY MATCH (FIRST TO 5)</button>
+        </div>
+      </div>
+
+      <!-- Game Over Overlay -->
+      <div id="gameOverOverlay" class="screen-overlay" style="display: none;">
+        <div class="overlay-card winner-card diwali-winner">
+          <div class="card-marigold-trim"></div>
+          <div class="trophy-icon">🪔</div>
+          <h2 id="winnerTitle">PLAYER 1 WINS!</h2>
+          <p id="finalScoreText" class="final-score">Final Score: 5 - 3</p>
+          <div class="overlay-buttons">
+            <button id="btnRestart" class="btn-primary">PLAY AGAIN</button>
+            <button id="btnBackToMenu" class="btn-secondary">CHANGE MODE</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls & Hotkey Footer Hints -->
+    <footer class="game-footer">
+      <div class="control-hints">
+        <span class="hint-pill p1-hint">
+          <strong>P1:</strong> Press <kbd>W</kbd> or <kbd>Space</kbd> or Tap Left
+        </span>
+        <span class="hint-pill p2-hint" id="p2ControlsHint" style="display: none;">
+          <strong>P2:</strong> Press <kbd>▲ Up</kbd> or <kbd>Enter</kbd> or Tap Right
+        </span>
+        <span class="hint-pill info-hint">
+          <strong>Hot Potato:</strong> 10s Rocket Rally! At 0s, rocket becomes a Bomb—dodge it to win!
+        </span>
+      </div>
+    </footer>
+  </div>
+  <!-- Application Bootstrap -->
+  <script src="game.bundle.js"></script>
+</body>
+</html>

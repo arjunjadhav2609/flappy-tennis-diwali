@@ -1,0 +1,18 @@
+{
+  "name": "p1",
+  "version": "1.0.0",
+  "description": "A simple, playable, two-player game inspired by tennis featuring vertical impulse movement on an open court, arcade-style bouncing, multi-zone tennis rackets, a 10-second Rocket-to-Bomb hot potato mechanic, and a vibrant Diwali festive theme.",
+  "main": "build.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "build": "node build.js",
+    "test": "node build.js && node tests/test_simulation.js && node tests/test_match_flow.js && node tests/test_requirements.js && node tests/test_speed_and_physics.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module"
+}
