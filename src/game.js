@@ -240,7 +240,7 @@ export class TennisGame {
     this.stateTimer = 0;
     this.statusMessage = '';
 
-    // Hot-Potato 10-second Point Countdown & 5-second Bomb Countdown
+    // Hot-Potato 10-second Point Countdown & 10-second Bomb Countdown
     this.pointCountdown = this.config.hotPotato.countdownSeconds;
     this.bombCountdown = this.config.hotPotato.bombFuseDurationSec;
     this.lastTickSecond = Math.ceil(this.pointCountdown);
@@ -388,7 +388,7 @@ export class TennisGame {
     this.p2.reset();
     this.ai.reset();
 
-    // Reset 10-second rocket countdown and 5-second bomb countdown
+    // Reset 10-second rocket countdown and 10-second bomb countdown
     this.pointCountdown = this.config.hotPotato.countdownSeconds;
     this.bombCountdown = this.config.hotPotato.bombFuseDurationSec;
     this.lastTickSecond = Math.ceil(this.pointCountdown);
@@ -599,7 +599,7 @@ export class TennisGame {
             this.runWarningTimer = this.runWarningDuration;
           }
         } else {
-          // BOMB PHASE: 5-second countdown
+          // BOMB PHASE: 10-second countdown
           if (this.runWarningTimer > 0) {
             this.runWarningTimer -= dt;
           }

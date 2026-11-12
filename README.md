@@ -47,25 +47,25 @@ The racket features a recognizable tennis racket shape with 3 distinct collision
 - **Prominent “RUN!” Warning:**
   - When the 10-second countdown ends, a prominent **“RUN!”** warning banner appears in red highlights alerting both players to dodge.
   - Positioned clearly in the open court without obscuring the HUD timer or player positions.
-- **5-Second Sudden-Death Bomb Phase (5s fresh countdown - Noticeably Harder):**
-  - Rocket transforms into an explosive **Diwali Bomb** with a significant sudden-death speed boost (`1.68x` speed multiplier) and begins a fresh, visible 5-second countdown in the HUD (`💣 BOMB: 5.0s`).
-  - **Noticeably Stronger & Faster Bounces:** Ground impacts apply an increased bounce strength (`1.25x` baseline impulse: ~650–705 px/s), ceiling rebounds kick down with `1.22x` force (~660 px/s), and minimum horizontal speed is elevated to `380 px/s`. Bounces feature dynamic bounded variation so its trajectory changes much faster and players have substantially less time to react.
+- **10-Second Sudden-Death Bomb Phase (10s fresh countdown):**
+  - Rocket transforms into an explosive **Diwali Bomb** with an intensified sudden-death speed boost (`1.82x` speed multiplier) and begins a fresh, visible 10-second countdown in the HUD (`💣 BOMB: 10.0s`).
+  - **Noticeably Stronger & Faster Bounces:** Ground impacts apply an increased bounce strength (`1.32x` baseline impulse: ~680–745 px/s), ceiling rebounds kick down with `1.28x` force (~690 px/s), and minimum horizontal speed is elevated to `420 px/s` with dynamic side-wall rebound multipliers (`1.12x`). Bounces feature dynamic bounded variation so its trajectory changes much faster and players must sustain dodging for a full 10 seconds.
   - **Visible, Playable & Speed-Capped:** The bomb's maximum velocity is strictly capped at `960 px/s` within court bounds (`minX = 10`, `maxX = 990`, `ceilingY = 30`, `groundY = 520`), ensuring high-speed thrill without visual tunneling or unreadable chaos.
-  - **Preserved Rocket Phase Physics & Timers:** Normal rocket rallies strictly preserve baseline travel speed (82% ratio), consistent 540 px/s arcade ground/ceiling bounces, standard racket returns, 10s Rocket countdown, 5s Bomb countdown, and original scoring rules.
-  - **Hit-by-Bomb Penalty:** If the bomb touches one player or their racket during the 5 seconds, the point ends immediately and awards 1 point to the opponent.
-  - **Both-Survive Scoring:** If the full 5 seconds expire without either player being hit, 1 point is awarded to each player.
+  - **Preserved Rocket Phase Physics & Timers:** Normal rocket rallies strictly preserve baseline travel speed (82% ratio), consistent 540 px/s arcade ground/ceiling bounces, standard racket returns, 10s Rocket countdown, and original scoring rules.
+  - **Hit-by-Bomb Penalty:** If the bomb touches one player or their racket during the 10 seconds, the point ends immediately and awards 1 point to the opponent.
+  - **Both-Survive Scoring:** If the full 10 seconds expire without either player being hit, 1 point is awarded to each player.
   - **Deterministic Collision Resolution:** Collisions occurring on the exact frame the timer reaches zero take precedence over timer expiry, preventing duplicate scoring.
-  - **Point Reset & Match Flow:** Rocket timer (10s) and Bomb timer (5s) reset cleanly for every new point, preserving the first-to-five match flow, server alternation, score display, and both PvC and PvP game modes.
+  - **Point Reset & Match Flow:** Rocket timer (10s) and Bomb timer (10s) reset cleanly for every new point, correctly displaying `ROCKET: 10.0s` at each serve, preserving the first-to-five match flow, server alternation, score display, and both PvC and PvP game modes.
 
 ---
 
 ## 🤖 Smarter & Responsive CPU Opponent
 
 - **Rocket Phase:** Capable and responsive rally intercept timing, calculating jump apex windows (0.16s–0.45s) to consistently return shots, adopting an alert ready-hover stance (`readyHeightY: 340`) while the ball is on the opponent's side, and tactically alternating between sweet-spot drives, upper lobs, and low drives.
-- **5-Second Harder Bomb Phase & Continuous Evasion:**
-  - Forward-simulates high-frequency trajectories (`simDt = 8ms`) incorporating stronger `1.25x` ground bounces and dynamic wall ricochets up to 3.5s forward.
-  - Utilizes sharpened crisis reflexes (`bombReactionDelayMs = 80ms`) and agile tap cadences (`bombTapCooldownMs = 150ms`) to dodge the faster bomb.
-  - Elevated high-altitude evasion (`targetY = 100`) clears the bomb's higher vertical arc, while grounded positioning lets high passes fly safely overhead.
+- **10-Second Harder Bomb Phase & Continuous Evasion:**
+  - Forward-simulates high-frequency trajectories (`simDt = 8ms`) incorporating stronger `1.32x` ground bounces and dynamic wall ricochets up to 3.5s forward.
+  - Utilizes sharpened crisis reflexes (`bombReactionDelayMs = 80ms`) and agile tap cadences (`bombTapCooldownMs = 150ms`) to dodge the faster bomb throughout the full 10-second phase.
+  - Elevated high-altitude evasion (`targetY = 95–100`) clears the bomb's higher vertical arc, while grounded positioning lets high passes fly safely overhead.
   - Emergency proximity avoidance reacts swiftly to sudden baseline ricochets.
   - Remains beatable and fun: CPU is governed by standard player jump impulse and gravity, and an occasional mistiming margin (5%) keeps human players capable of winning sudden-death points through smart positioning.
 
@@ -76,7 +76,7 @@ The racket features a recognizable tennis racket shape with 3 distinct collision
 - **Opening Screen:**
   - Prominent Match Objective banner ("First to 5 Points Wins the Festival Crown!").
   - Clear Solo vs 2P mode selector with active indicators and `[SOLO]` / `[2-PLAYER]` badges.
-  - Two-phase gameplay walkthrough (Phase 1: 10s Rocket Rally vs Phase 2: 5s Bomb Dodge).
+  - Two-phase gameplay walkthrough (Phase 1: 10s Rocket Rally vs Phase 2: 10s Bomb Dodge).
   - Explicit split controls layout for Player 1 (Sapphire Prince) and Player 2 / CPU (Ruby Champion), plus mobile touch guidance.
 - **Expressive Characters & Distinct Silhouettes:**
   - **Visual Distinction & Silhouettes:** P1 features an upright royal Kalgi feather plume with azure jewel and sapphire kurta; P2/CPU features a wide regal turban with an emerald peacock aigrette brooch and ruby crimson attire. Silhouettes are unmistakable at any distance.

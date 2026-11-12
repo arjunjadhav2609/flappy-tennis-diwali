@@ -157,11 +157,11 @@ console.log('--- Running Comprehensive Requirement Tests ---');
   console.log('✓ Collision shape matches visible shape (head, direct handle, no neck) verified.');
 }
 
-// 10. Explosive phase 10s countdown, fresh 5s bomb timer, wall rebounds, touch loses, both survive wins
+// 10. Explosive phase 10s countdown, fresh 10s bomb timer, wall rebounds, touch loses, both survive wins
 {
   const config = createConfig();
   assert.strictEqual(config.hotPotato.countdownSeconds, 10.0, 'Countdown is 10 seconds');
-  assert.strictEqual(config.hotPotato.bombFuseDurationSec, 5.0, 'Bomb countdown is 5 seconds');
+  assert.strictEqual(config.hotPotato.bombFuseDurationSec, 10.0, 'Bomb countdown is 10 seconds');
 
   const p1 = new Player('p1', 110, true, config);
   const p2 = new Player('p2', 890, false, config);
@@ -194,7 +194,7 @@ console.log('--- Running Comprehensive Requirement Tests ---');
   assert.strictEqual(rightEvt, null, 'Right wall bounce does not end point');
   assert(bombRebound.vx < 0, 'Right wall bounce reverses vx to negative');
 
-  // Full 5 seconds expire without either player hit -> point to each player
+  // Full 10 seconds expire without either player hit -> point to each player
   const bombDetonate = new Ball(config);
   bombDetonate.serve('p2', 250, 400);
   bombDetonate.transformToBomb();
@@ -202,7 +202,7 @@ console.log('--- Running Comprehensive Requirement Tests ---');
   const detEvt = bombDetonate.update(0.016, court, p1, p2);
   assert(detEvt && detEvt.scorer === 'both', 'Bomb detonation without contact awards point to each player');
 
-  console.log('✓ Explosive phase rules (10s countdown, 5s bomb timer, wall rebounds, touch loses, both-survive wins) verified.');
+  console.log('✓ Explosive phase rules (10s countdown, 10s bomb timer, wall rebounds, touch loses, both-survive wins) verified.');
 }
 
 // 11. Missed rocket Diya effect data

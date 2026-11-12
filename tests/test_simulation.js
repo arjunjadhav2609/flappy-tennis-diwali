@@ -169,12 +169,12 @@ console.log('--- Starting Diwali & Hot-Potato Tennis Game Tests ---');
   console.log('✓ Ceiling collision and rebound deduplication verified.');
 }
 
-// Test 5: Hot-Potato Bomb Mechanics (10s Transition, 5s Countdown, Wall Rebounds, Scoring)
+// Test 5: Hot-Potato Bomb Mechanics (10s Transition, 10s Countdown, Wall Rebounds, Scoring)
 {
-  console.log('Testing Hot-Potato Bomb (10s countdown, 5s bomb timer, wall rebounds, hit vs both-survive scoring)...');
+  console.log('Testing Hot-Potato Bomb (10s countdown, 10s bomb timer, wall rebounds, hit vs both-survive scoring)...');
   const config = createConfig();
   assert.strictEqual(config.hotPotato.countdownSeconds, 10.0, 'Hot potato countdown must be 10.0 seconds');
-  assert.strictEqual(config.hotPotato.bombFuseDurationSec, 5.0, 'Bomb countdown must be 5.0 seconds');
+  assert.strictEqual(config.hotPotato.bombFuseDurationSec, 10.0, 'Bomb countdown must be 10.0 seconds');
   const court = new Court(config);
   const p1 = new Player('p1', 110, true, config);
   const p2 = new Player('p2', 890, false, config);
@@ -184,7 +184,7 @@ console.log('--- Starting Diwali & Hot-Potato Tennis Game Tests ---');
   bombTouch.serve('p2', 500, 300);
   bombTouch.transformToBomb();
   assert.strictEqual(bombTouch.phase, BallPhase.BOMB, 'Ball must be in BOMB phase');
-  assert.strictEqual(bombTouch.bombFuseTimer, 5.0, 'Bomb timer must start at 5.0 seconds');
+  assert.strictEqual(bombTouch.bombFuseTimer, 10.0, 'Bomb timer must start at 10.0 seconds');
 
   // Send bomb directly into P1
   bombTouch.x = p1.x + 2;
@@ -221,7 +221,7 @@ console.log('--- Starting Diwali & Hot-Potato Tennis Game Tests ---');
   assert(bombRebound.inPlay, 'Bomb must remain in play after right wall bounce');
   console.log('✓ Left and right side-wall rebounds preserve play at active playable speed.');
 
-  // Scenario C: Both survive full 5 seconds -> Award 1 point to each player!
+  // Scenario C: Both survive full 10 seconds -> Award 1 point to each player!
   const bombSurvive = new Ball(config);
   bombSurvive.serve('p1', 500, 200);
   bombSurvive.transformToBomb();
@@ -231,9 +231,9 @@ console.log('--- Starting Diwali & Hot-Potato Tennis Game Tests ---');
   p2.y = 80;
 
   const surviveEvt = bombSurvive.update(0.02, court, p1, p2);
-  assert(surviveEvt && surviveEvt.type === 'POINT_SCORED', '5s timer expiration must end point');
-  assert.strictEqual(surviveEvt.scorer, 'both', 'Both players awarded 1 point when full 5s expire without hit');
-  console.log('✓ Both-survive scoring awarded 1 point to each player after 5 seconds expired.');
+  assert(surviveEvt && surviveEvt.type === 'POINT_SCORED', '10s timer expiration must end point');
+  assert.strictEqual(surviveEvt.scorer, 'both', 'Both players awarded 1 point when full 10s expire without hit');
+  console.log('✓ Both-survive scoring awarded 1 point to each player after 10 seconds expired.');
 
   // Scenario D: Deterministic collision on the frame timer reaches zero: Hit takes precedence over survival!
   const bombFrameZero = new Ball(config);

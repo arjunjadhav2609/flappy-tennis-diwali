@@ -31,6 +31,7 @@ class HeadlessGame {
     this.currentServer = 'p1';
     this.stateTimer = 0;
     this.pointCountdown = this.config.hotPotato.countdownSeconds;
+    this.bombCountdown = this.config.hotPotato.bombFuseDurationSec;
   }
 
   startMatch() {
@@ -44,6 +45,7 @@ class HeadlessGame {
     this.state = GameState.SERVING;
     this.stateTimer = this.config.gameplay.serveCountdownMs / 1000;
     this.pointCountdown = this.config.hotPotato.countdownSeconds;
+    this.bombCountdown = this.config.hotPotato.bombFuseDurationSec;
     const server = this.currentServer === 'p1' ? this.p1 : this.p2;
     this.ball.prepareHover(this.currentServer, server.getRacketX(), server.y - 65);
   }
@@ -89,12 +91,15 @@ class HeadlessGame {
         this.executeServe();
       }
     } else if (this.state === GameState.RALLY) {
-      this.pointCountdown -= dt;
-      if (this.pointCountdown <= 0) {
-        this.pointCountdown = 0;
-        if (this.ball.phase !== BallPhase.BOMB) {
+      if (this.ball.phase === BallPhase.ROCKET) {
+        this.pointCountdown -= dt;
+        if (this.pointCountdown <= 0) {
+          this.pointCountdown = 0;
           this.ball.transformToBomb();
+          this.bombCountdown = this.config.hotPotato.bombFuseDurationSec;
         }
+      } else {
+        this.bombCountdown = Math.max(0, this.ball.bombFuseTimer);
       }
 
       const rallyEvent = this.ball.update(dt, this.court, this.p1, this.p2);
@@ -173,9 +178,10 @@ assert.strictEqual(game.state, GameState.SERVING, 'Game must advance to SERVING 
 assert.strictEqual(game.currentServer, 'p2', 'Server must alternate to p2');
 assert.strictEqual(game.pointCountdown, game.config.hotPotato.countdownSeconds, 'Rocket timer must reset to 10s for new point');
 assert.strictEqual(game.ball.phase, BallPhase.ROCKET, 'Ball must reset to ROCKET phase for new point');
-console.log('✓ Point reset verified: 10s timer, 5s bomb timer, server alternation (P2), and ROCKET phase restored.');
+assert.strictEqual(game.bombCountdown, game.config.hotPotato.bombFuseDurationSec, 'Bomb timer must reset to 10s for new point');
+console.log('✓ Point reset verified: 10s timer, 10s bomb timer, server alternation (P2), and ROCKET phase restored.');
 
-// 5C. Test Both Survive 5s Bomb Flow: Point awarded to both players
+// 5C. Test Both Survive 10s Bomb Flow: Point awarded to both players
 while (game.state === GameState.SERVING) {
   game.step(0.02);
 }
@@ -184,9 +190,9 @@ assert.strictEqual(game.state, GameState.RALLY);
 game.pointCountdown = 0.02;
 game.step(0.03);
 assert.strictEqual(game.ball.phase, BallPhase.BOMB);
-assert(Math.abs(game.ball.bombFuseTimer - 5.0) < 0.05, 'Bomb countdown starts at fresh 5.0 seconds');
+assert(Math.abs(game.ball.bombFuseTimer - 10.0) < 0.05, 'Bomb countdown starts at fresh 10.0 seconds');
 
-// Fast forward 5s bomb fuse to expiration while dodging
+// Fast forward 10s bomb fuse to expiration while dodging
 game.ball.bombFuseTimer = 0.02;
 game.p1.y = 80;
 game.p2.y = 80;

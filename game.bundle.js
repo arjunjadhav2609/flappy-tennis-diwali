@@ -64,14 +64,15 @@ const DEFAULT_CONFIG = {
 
   // Rocket and Hot-Potato Bomb Mechanics
   hotPotato: {
-    countdownSeconds: 10.0, // 10-second Rocket rally countdown
+    countdownSeconds: 10.0, // 10-second Rocket rally countdown (unchanged)
     warningThresholdSec: 3.5, // Warning threshold when rocket time is running out
-    bombSpeedMultiplier: 1.68, // Harder sudden-death speed boost (up from 1.45)
-    bombFuseDurationSec: 5.0,  // Fresh 5-second Bomb countdown
+    bombSpeedMultiplier: 1.82, // Challenging sudden-death speed boost (up from 1.68)
+    bombFuseDurationSec: 10.0, // Full 10-second Bomb countdown
     runWarningDurationSec: 1.4,// Duration to display prominent RUN! dodge warning
-    bombBounceMultiplier: 1.25, // Stronger Bomb ground bounce (1.25x = 675 px/s)
-    bombCeilingMultiplier: 1.22, // Stronger Bomb ceiling rebound (1.22x = 660 px/s)
-    bombMinHorizontalSpeed: 380, // Elevated minimum speed so bomb remains brisk & unpredictable
+    bombBounceMultiplier: 1.32, // Stronger Bomb ground bounce (1.32x = 712.8 px/s)
+    bombCeilingMultiplier: 1.28, // Stronger Bomb ceiling rebound (1.28x = 691.2 px/s)
+    bombMinHorizontalSpeed: 420, // Elevated minimum speed for brisk, challenging motion
+    bombSideReboundMultiplier: 1.12, // Dynamic side wall rebound impulse multiplier
   },
 
   ai: {
@@ -1769,7 +1770,7 @@ class Ball {
         return bombHitEvent;
       }
 
-      // 2. If full 5 seconds expire without either player being hit, award one point to each player
+      // 2. If full 10 seconds expire without either player being hit, award one point to each player
       if (this.bombFuseTimer <= 0) {
         this.bombFuseTimer = 0;
         this.inPlay = false;
@@ -1777,7 +1778,7 @@ class Ball {
         return {
           type: 'POINT_SCORED',
           scorer: 'both',
-          reason: '✨ Both players survived the 5s bomb! (1 point each)'
+          reason: '✨ Both players survived the 10s bomb! (1 point each)'
         };
       }
     } else {
@@ -2003,15 +2004,15 @@ class Ball {
 
       if (!this.wasGrounded && this.vy > 0) {
         if (this.phase === BallPhase.BOMB) {
-          // Dynamic Bomb ground bounce: noticeably increased strength (1.25x = ~675 px/s) with controlled variation
-          const bombBounceMult = this.config.hotPotato?.bombBounceMultiplier || 1.25;
+          // Dynamic Bomb ground bounce: boosted strength (1.32x = ~712 px/s) with controlled variation
+          const bombBounceMult = this.config.hotPotato?.bombBounceMultiplier || 1.32;
           const bombVariance = 1.0 + (Math.random() - 0.5) * 0.08;
           const bounceImpulse = this.config.ball.arcadeBounceImpulse * bombBounceMult * bombVariance;
           this.vy = -bounceImpulse;
 
           // Controlled horizontal variation with elevated minSpeed
-          const vxVariation = (Math.random() - 0.5) * 55;
-          const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed || 380;
+          const vxVariation = (Math.random() - 0.5) * 65;
+          const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed || 420;
           const maxSpeed = this.config.ball.maxSpeed || 960;
           const nextVx = Math.sign(this.vx || 1) * (Math.abs(this.vx) * this.config.ball.groundFriction + vxVariation);
           this.vx = Math.sign(nextVx || 1) * Math.min(maxSpeed, Math.max(minSpeed, Math.abs(nextVx)));
@@ -2054,16 +2055,16 @@ class Ball {
 
       if (!this.wasCeilinged && this.vy < 0) {
         if (this.phase === BallPhase.BOMB) {
-          // Dynamic Bomb ceiling bounce: stronger downward rebound (1.22x) with bounded variation
-          const bombCeilMult = this.config.hotPotato?.bombCeilingMultiplier || 1.22;
+          // Dynamic Bomb ceiling bounce: stronger downward rebound (1.28x = ~691 px/s) with bounded variation
+          const bombCeilMult = this.config.hotPotato?.bombCeilingMultiplier || 1.28;
           const bombVariance = 1.0 + (Math.random() - 0.5) * 0.08;
           const impulse = (this.config.ball.ceilingBounceImpulse || this.config.ball.arcadeBounceImpulse) * bombCeilMult * bombVariance;
           this.vy = impulse;
 
           // Controlled bounded horizontal nudge
-          const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed || 380;
+          const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed || 420;
           const maxSpeed = this.config.ball.maxSpeed || 960;
-          const vxNudge = (Math.random() - 0.5) * 45;
+          const vxNudge = (Math.random() - 0.5) * 55;
           const nextVx = Math.sign(this.vx || 1) * (Math.abs(this.vx) + vxNudge);
           this.vx = Math.sign(nextVx || 1) * Math.min(maxSpeed, Math.max(minSpeed, Math.abs(nextVx)));
         } else {
@@ -2093,7 +2094,7 @@ class Ball {
   checkSideWallBounces() {
     const minX = this.config.court.minX ?? 10;
     const maxX = this.config.court.maxX ?? (this.config.court.width - 10);
-    const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed ?? 380;
+    const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed ?? 420;
     const maxSpeed = this.config.ball.maxSpeed ?? 960;
 
     let hitWall = null;
@@ -2106,18 +2107,19 @@ class Ball {
     }
 
     if (hitWall) {
-      // Dynamic rebound: noticeably boosted bounce strength with controlled bounded variation
+      // Dynamic rebound: boosted bounce strength with controlled bounded variation
+      const wallMult = this.config.hotPotato?.bombSideReboundMultiplier || 1.12;
       const variance = 1.0 + (Math.random() - 0.5) * 0.08;
-      let reboundVx = Math.max(Math.abs(this.vx) * 1.08 * variance, minSpeed);
+      let reboundVx = Math.max(Math.abs(this.vx) * wallMult * variance, minSpeed);
 
       // Controlled vertical deflection so rebounds don't repeat the exact same static path
-      const vyJitter = (Math.random() - 0.5) * 90;
+      const vyJitter = (Math.random() - 0.5) * 110;
       this.vy += vyJitter;
 
       // Prevent flat horizontal skimming: if vertical speed is too small, inject purposeful arc deflection
-      if (Math.abs(this.vy) < 80) {
+      if (Math.abs(this.vy) < 85) {
         const arcSign = Math.random() > 0.5 ? 1 : -1;
-        this.vy = arcSign * (90 + Math.random() * 50);
+        this.vy = arcSign * (100 + Math.random() * 55);
       }
 
       // Cap speed within fair playable bounds
@@ -2583,10 +2585,10 @@ class ComputerOpponent {
     const maxX = this.config.court.maxX ?? (this.config.court.width - 10);
     const ballRadius = this.config.ball.radius;
     const ballGravity = this.config.ball.gravity;
-    const bombBounceMult = this.config.hotPotato?.bombBounceMultiplier || 1.25;
-    const arcadeBounce = this.config.ball.arcadeBounceImpulse * bombBounceMult; // Faster bomb bounce factor
+    const bombBounceMult = this.config.hotPotato?.bombBounceMultiplier || 1.32;
+    const arcadeBounce = this.config.ball.arcadeBounceImpulse * bombBounceMult; // Boosted bomb bounce factor
     const groundFriction = this.config.ball.groundFriction;
-    const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed ?? 380;
+    const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed ?? 420;
 
     const minY = ceilingY + this.player.height / 2;
     const maxY = groundY - this.player.height / 2;
@@ -3121,7 +3123,7 @@ class TennisGame {
     this.stateTimer = 0;
     this.statusMessage = '';
 
-    // Hot-Potato 10-second Point Countdown & 5-second Bomb Countdown
+    // Hot-Potato 10-second Point Countdown & 10-second Bomb Countdown
     this.pointCountdown = this.config.hotPotato.countdownSeconds;
     this.bombCountdown = this.config.hotPotato.bombFuseDurationSec;
     this.lastTickSecond = Math.ceil(this.pointCountdown);
@@ -3269,7 +3271,7 @@ class TennisGame {
     this.p2.reset();
     this.ai.reset();
 
-    // Reset 10-second rocket countdown and 5-second bomb countdown
+    // Reset 10-second rocket countdown and 10-second bomb countdown
     this.pointCountdown = this.config.hotPotato.countdownSeconds;
     this.bombCountdown = this.config.hotPotato.bombFuseDurationSec;
     this.lastTickSecond = Math.ceil(this.pointCountdown);
@@ -3480,7 +3482,7 @@ class TennisGame {
             this.runWarningTimer = this.runWarningDuration;
           }
         } else {
-          // BOMB PHASE: 5-second countdown
+          // BOMB PHASE: 10-second countdown
           if (this.runWarningTimer > 0) {
             this.runWarningTimer -= dt;
           }

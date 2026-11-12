@@ -160,10 +160,10 @@ export class ComputerOpponent {
     const maxX = this.config.court.maxX ?? (this.config.court.width - 10);
     const ballRadius = this.config.ball.radius;
     const ballGravity = this.config.ball.gravity;
-    const bombBounceMult = this.config.hotPotato?.bombBounceMultiplier || 1.25;
-    const arcadeBounce = this.config.ball.arcadeBounceImpulse * bombBounceMult; // Faster bomb bounce factor
+    const bombBounceMult = this.config.hotPotato?.bombBounceMultiplier || 1.32;
+    const arcadeBounce = this.config.ball.arcadeBounceImpulse * bombBounceMult; // Boosted bomb bounce factor
     const groundFriction = this.config.ball.groundFriction;
-    const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed ?? 380;
+    const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed ?? 420;
 
     const minY = ceilingY + this.player.height / 2;
     const maxY = groundY - this.player.height / 2;

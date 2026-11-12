@@ -60,14 +60,15 @@ export const DEFAULT_CONFIG = {
 
   // Rocket and Hot-Potato Bomb Mechanics
   hotPotato: {
-    countdownSeconds: 10.0, // 10-second Rocket rally countdown
+    countdownSeconds: 10.0, // 10-second Rocket rally countdown (unchanged)
     warningThresholdSec: 3.5, // Warning threshold when rocket time is running out
-    bombSpeedMultiplier: 1.68, // Harder sudden-death speed boost (up from 1.45)
-    bombFuseDurationSec: 5.0,  // Fresh 5-second Bomb countdown
+    bombSpeedMultiplier: 1.82, // Challenging sudden-death speed boost (up from 1.68)
+    bombFuseDurationSec: 10.0, // Full 10-second Bomb countdown
     runWarningDurationSec: 1.4,// Duration to display prominent RUN! dodge warning
-    bombBounceMultiplier: 1.25, // Stronger Bomb ground bounce (1.25x = 675 px/s)
-    bombCeilingMultiplier: 1.22, // Stronger Bomb ceiling rebound (1.22x = 660 px/s)
-    bombMinHorizontalSpeed: 380, // Elevated minimum speed so bomb remains brisk & unpredictable
+    bombBounceMultiplier: 1.32, // Stronger Bomb ground bounce (1.32x = 712.8 px/s)
+    bombCeilingMultiplier: 1.28, // Stronger Bomb ceiling rebound (1.28x = 691.2 px/s)
+    bombMinHorizontalSpeed: 420, // Elevated minimum speed for brisk, challenging motion
+    bombSideReboundMultiplier: 1.12, // Dynamic side wall rebound impulse multiplier
   },
 
   ai: {

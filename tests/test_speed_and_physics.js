@@ -80,7 +80,7 @@ console.log('--- Running Rocket Speed, Bounce Consistency & Explosive Phase Test
   assert(Math.abs(rocket.vy) >= 500 && Math.abs(rocket.vy) <= 570,
     `Rocket bounce must stay strictly around 540 px/s (actual: ${Math.abs(rocket.vy).toFixed(1)})`);
 
-  // Test Bomb ground bounce: noticeably increased dynamic impulse (> 620 px/s)
+  // Test Bomb ground bounce: boosted dynamic impulse (> 660 px/s)
   const bomb = new Ball(config);
   bomb.phase = BallPhase.BOMB;
   bomb.y = config.court.groundY - bomb.radius;
@@ -88,8 +88,8 @@ console.log('--- Running Rocket Speed, Bounce Consistency & Explosive Phase Test
   bomb.vx = 350;
   bomb.checkGroundBounce();
   const bombGroundVy = Math.abs(bomb.vy);
-  assert(bombGroundVy >= 620,
-    `Bomb phase must have noticeably increased bounce strength (actual: ${bombGroundVy.toFixed(1)})`);
+  assert(bombGroundVy >= 660,
+    `Bomb phase must have boosted bounce strength >= 660 px/s (actual: ${bombGroundVy.toFixed(1)})`);
 
   // Test speed cap on wall rebound
   bomb.x = config.court.maxX;
@@ -120,10 +120,10 @@ console.log('--- Running Rocket Speed, Bounce Consistency & Explosive Phase Test
   const allIdentical = reboundSamples.every(s => s.vy === reboundSamples[0].vy && s.vx === reboundSamples[0].vx);
   assert(!allIdentical, 'Bomb rebounds must exhibit controlled variation rather than static repetitive values');
 
-  // Verify bounded limits for harder, faster bounces
+  // Verify bounded limits for boosted, challenging bounces
   for (const s of reboundSamples) {
-    assert(Math.abs(s.vy) >= 620 && Math.abs(s.vy) <= 730, `Rebound vy (${Math.abs(s.vy).toFixed(1)}) within dynamic boosted limits`);
-    assert(Math.abs(s.vx) >= 300 && Math.abs(s.vx) <= config.ball.maxSpeed, 'Rebound vx within playable speed limits');
+    assert(Math.abs(s.vy) >= 660 && Math.abs(s.vy) <= 760, `Rebound vy (${Math.abs(s.vy).toFixed(1)}) within dynamic boosted limits`);
+    assert(Math.abs(s.vx) >= 380 && Math.abs(s.vx) <= config.ball.maxSpeed, 'Rebound vx within playable speed limits');
   }
 
   console.log('✓ Controlled non-repeating bounded variation confirmed across consecutive Bomb rebounds.');
@@ -148,6 +148,7 @@ console.log('--- Running Rocket Speed, Bounce Consistency & Explosive Phase Test
   assert(html.includes('btnModePvC') && html.includes('btnModePvP'), 'Both game mode buttons present');
   assert(html.includes('SOLO') && html.includes('2-PLAYER'), 'Mode badges present');
   assert(html.includes('Phase 1') && html.includes('Phase 2'), 'Two-phase game flow clearly documented');
+  assert(html.includes('10s Bomb Dodge'), 'Opening screen must state 10s Bomb Dodge phase');
   assert(html.includes('mobile-controls-hint'), 'Mobile / touch controls hint present');
 
   console.log('✓ Visual distinction (attire & silhouettes) and opening screen Polish verified.');
