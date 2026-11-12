@@ -66,6 +66,8 @@ export class Ball {
     this.phase = BallPhase.ROCKET;
     this.hasThroatBoost = false;
     this.bombFuseTimer = 0;
+    this.wasLeftWalled = false;
+    this.wasRightWalled = false;
     this.trail = [];
     this.sparks = [];
     this.hitSparks = [];
@@ -89,6 +91,8 @@ export class Ball {
     this.phase = BallPhase.ROCKET;
     this.hasThroatBoost = false;
     this.bombFuseTimer = 0;
+    this.wasLeftWalled = false;
+    this.wasRightWalled = false;
     this.trail = [];
     this.sparks = [];
     this.hitSparks = [];
@@ -189,15 +193,19 @@ export class Ball {
     this.x += this.vx * travelRatio * dt;
     this.y += this.vy * dt;
 
-    // Fixed court boundary clamping (prevent rocket from leaving playable area)
-    const minBallX = 10;
-    const maxBallX = this.config.court.width - 10;
-    if (this.x < minBallX) {
-      this.x = minBallX;
-      if (this.vx < 0) this.vx = -this.vx * 0.8;
-    } else if (this.x > maxBallX) {
-      this.x = maxBallX;
-      if (this.vx > 0) this.vx = -this.vx * 0.8;
+    // Court side boundaries: Rocket clamps if missed; Bomb rebounds with playable speed off left/right walls
+    if (this.phase === BallPhase.ROCKET) {
+      const minBallX = 10;
+      const maxBallX = this.config.court.width - 10;
+      if (this.x < minBallX) {
+        this.x = minBallX;
+        if (this.vx < 0) this.vx = -this.vx * 0.8;
+      } else if (this.x > maxBallX) {
+        this.x = maxBallX;
+        if (this.vx > 0) this.vx = -this.vx * 0.8;
+      }
+    } else {
+      this.checkSideWallBounces();
     }
 
     // Orientation angle follows flight trajectory
@@ -207,29 +215,21 @@ export class Ball {
     if (this.phase === BallPhase.BOMB) {
       this.bombFuseTimer -= dt;
 
-      // 1. Check if Bomb touches either player or their racket (Hot potato rule: touching loses!)
+      // 1. Check if Bomb touches either player or their racket (Touching loses!)
       const bombHitEvent = this.checkBombPlayerCollision(p1, p2);
       if (bombHitEvent) {
         return bombHitEvent;
       }
 
-      // 2. Check if a player avoided the bomb (bomb passes behind them without touching)
-      const avoidedEvent = this.checkBombAvoided(p1, p2);
-      if (avoidedEvent) {
-        return avoidedEvent;
-      }
-
-      // 3. If fuse expires without contact, award the point to the player who avoided it
+      // 2. If full 5 seconds expire without either player being hit, award one point to each player
       if (this.bombFuseTimer <= 0) {
+        this.bombFuseTimer = 0;
         this.inPlay = false;
         sound.playBombExplosion();
-        const side = this.x < court.centerX ? 'p1' : 'p2';
-        const scorer = side; // The player on this side avoided contact with the bomb!
-        const scorerName = scorer === 'p1' ? 'Player 1' : (this.config.mode === 'PVP' ? 'Player 2' : 'Computer');
         return {
           type: 'POINT_SCORED',
-          scorer,
-          reason: `✨ ${scorerName} avoided the bomb detonation! (Point to ${scorerName})`
+          scorer: 'both',
+          reason: '✨ Both players survived the 5s bomb! (1 point each)'
         };
       }
     } else {
@@ -504,8 +504,38 @@ export class Ball {
   }
 
   /**
+   * Bomb Phase: Side-Wall Bounces
+   * Bomb bounces off the court's left and right sides while keeping a lively playable speed.
+   */
+  checkSideWallBounces() {
+    const minX = this.config.court.minX ?? 10;
+    const maxX = this.config.court.maxX ?? (this.config.court.width - 10);
+    const minSpeed = this.config.ball.minHorizontalSpeed ?? 300;
+
+    if (this.x - this.radius <= minX || this.x <= minX) {
+      this.x = minX + this.radius;
+      if (this.vx < 0) {
+        this.vx = Math.max(Math.abs(this.vx), minSpeed);
+        sound.playBounce(0.75);
+        this.emitRacketHitSparks(this.x, this.y);
+        return { type: 'WALL_BOUNCE', wall: 'left' };
+      }
+    } else if (this.x + this.radius >= maxX || this.x >= maxX) {
+      this.x = maxX - this.radius;
+      if (this.vx > 0) {
+        this.vx = -Math.max(Math.abs(this.vx), minSpeed);
+        sound.playBounce(0.75);
+        this.emitRacketHitSparks(this.x, this.y);
+        return { type: 'WALL_BOUNCE', wall: 'right' };
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Hot-Potato Bomb Collision Check:
-   * "If the bomb touches a player or their racket, or detonates on their side, that player loses the point."
+   * If the bomb touches a player or their racket during the 5s phase, that player loses the point.
    */
   checkBombPlayerCollision(p1, p2) {
     const testTouch = (player) => {
@@ -535,6 +565,7 @@ export class Ball {
       return {
         type: 'POINT_SCORED',
         scorer: 'p2',
+        hitPlayer: 'p1',
         reason: '💥 Bomb touched Player 1! (Point to Player 2)'
       };
     }
@@ -546,41 +577,8 @@ export class Ball {
       return {
         type: 'POINT_SCORED',
         scorer: 'p1',
+        hitPlayer: 'p2',
         reason: `💥 Bomb touched ${p2Name}! (Point to Player 1)`
-      };
-    }
-
-    return null;
-  }
-
-  /**
-   * Hot-Potato Bomb Avoidance Check:
-   * "If a player avoids the bomb and it passes or detonates without touching them, award that player the point."
-   */
-  checkBombAvoided(p1, p2) {
-    const p1Bounds = p1.getRacketBounds();
-    const p2Bounds = p2.getRacketBounds();
-
-    // Bomb passed past Player 1 without touching them -> Player 1 successfully avoided it!
-    if (this.vx < 0 && this.x < p1Bounds.overall.left - this.radius - 8) {
-      this.inPlay = false;
-      sound.playBombExplosion();
-      return {
-        type: 'POINT_SCORED',
-        scorer: 'p1',
-        reason: '✨ Player 1 avoided the bomb! (Point to Player 1)'
-      };
-    }
-
-    // Bomb passed past Player 2 without touching them -> Player 2 successfully avoided it!
-    if (this.vx > 0 && this.x > p2Bounds.overall.right + this.radius + 8) {
-      this.inPlay = false;
-      sound.playBombExplosion();
-      const p2Name = this.config.mode === 'PVP' ? 'Player 2' : 'Computer';
-      return {
-        type: 'POINT_SCORED',
-        scorer: 'p2',
-        reason: `✨ ${p2Name} avoided the bomb! (Point to ${p2Name})`
       };
     }
 

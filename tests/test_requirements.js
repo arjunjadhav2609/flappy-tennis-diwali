@@ -157,16 +157,17 @@ console.log('--- Running Comprehensive Requirement Tests ---');
   console.log('✓ Collision shape matches visible shape (head, direct handle, no neck) verified.');
 }
 
-// 10. Explosive phase 10s countdown, faster bomb, touch loses, avoid wins
+// 10. Explosive phase 10s countdown, fresh 5s bomb timer, wall rebounds, touch loses, both survive wins
 {
   const config = createConfig();
   assert.strictEqual(config.hotPotato.countdownSeconds, 10.0, 'Countdown is 10 seconds');
+  assert.strictEqual(config.hotPotato.bombFuseDurationSec, 5.0, 'Bomb countdown is 5 seconds');
 
   const p1 = new Player('p1', 110, true, config);
   const p2 = new Player('p2', 890, false, config);
   const court = new Court(config);
 
-  // Bomb touch loses
+  // Bomb touch loses (point to opponent)
   const bombTouch = new Ball(config);
   bombTouch.serve('p2', 200, 300);
   bombTouch.transformToBomb();
@@ -175,26 +176,33 @@ console.log('--- Running Comprehensive Requirement Tests ---');
   const touchEvt = bombTouch.update(0.016, court, p1, p2);
   assert(touchEvt && touchEvt.scorer === 'p2', 'Touching bomb gives point to opponent');
 
-  // Bomb avoided wins
-  const bombAvoid = new Ball(config);
-  bombAvoid.serve('p2', 200, 480);
-  bombAvoid.transformToBomb();
-  p1.y = 100; // dodge high
-  bombAvoid.x = p1.getRacketBounds().overall.left - 20;
-  bombAvoid.y = 480;
-  bombAvoid.vx = -500;
-  const avoidEvt = bombAvoid.update(0.016, court, p1, p2);
-  assert(avoidEvt && avoidEvt.scorer === 'p1', 'Avoiding bomb gives point to dodging player');
+  // Bomb rebounds off left and right court boundaries and stays in play
+  const bombRebound = new Ball(config);
+  bombRebound.serve('p1', 15, 300);
+  bombRebound.transformToBomb();
+  bombRebound.x = config.court.minX + 2;
+  bombRebound.vx = -400;
+  p1.y = 80;
+  p2.y = 80;
+  const leftEvt = bombRebound.update(0.016, court, p1, p2);
+  assert.strictEqual(leftEvt, null, 'Left wall bounce does not end point');
+  assert(bombRebound.vx > 0, 'Left wall bounce reverses vx to positive');
 
-  // Bomb detonation without contact wins
+  bombRebound.x = config.court.maxX - 2;
+  bombRebound.vx = 400;
+  const rightEvt = bombRebound.update(0.016, court, p1, p2);
+  assert.strictEqual(rightEvt, null, 'Right wall bounce does not end point');
+  assert(bombRebound.vx < 0, 'Right wall bounce reverses vx to negative');
+
+  // Full 5 seconds expire without either player hit -> point to each player
   const bombDetonate = new Ball(config);
   bombDetonate.serve('p2', 250, 400);
   bombDetonate.transformToBomb();
   bombDetonate.bombFuseTimer = 0.001;
   const detEvt = bombDetonate.update(0.016, court, p1, p2);
-  assert(detEvt && detEvt.scorer === 'p1', 'Bomb detonation without contact awards point to dodging player');
+  assert(detEvt && detEvt.scorer === 'both', 'Bomb detonation without contact awards point to each player');
 
-  console.log('✓ Explosive phase rules (10s countdown, touch loses, avoid wins) verified.');
+  console.log('✓ Explosive phase rules (10s countdown, 5s bomb timer, wall rebounds, touch loses, both-survive wins) verified.');
 }
 
 // 11. Missed rocket Diya effect data

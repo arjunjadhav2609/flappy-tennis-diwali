@@ -16,6 +16,8 @@ const DEFAULT_CONFIG = {
     baselineP1X: 110,     // Player 1 fixed baseline X
     baselineP2X: 890,     // Player 2 fixed baseline X
     ceilingY: 30,         // Top playable court boundary
+    minX: 10,             // Left playable court boundary
+    maxX: 990,            // Right playable court boundary (width - 10)
   },
 
   player: {
@@ -62,10 +64,11 @@ const DEFAULT_CONFIG = {
 
   // Rocket and Hot-Potato Bomb Mechanics
   hotPotato: {
-    countdownSeconds: 10.0, // 10-second point countdown
-    warningThresholdSec: 3.5, // Warning threshold when time is running out
+    countdownSeconds: 10.0, // 10-second Rocket rally countdown
+    warningThresholdSec: 3.5, // Warning threshold when rocket time is running out
     bombSpeedMultiplier: 1.45, // Bomb sudden-death speed boost
-    bombFuseDurationSec: 5.0,  // Max sudden-death duration before detonation
+    bombFuseDurationSec: 5.0,  // Fresh 5-second Bomb countdown
+    runWarningDurationSec: 1.4,// Duration to display prominent RUN! dodge warning
   },
 
   ai: {
@@ -1362,6 +1365,8 @@ class Ball {
     this.phase = BallPhase.ROCKET;
     this.hasThroatBoost = false;
     this.bombFuseTimer = 0;
+    this.wasLeftWalled = false;
+    this.wasRightWalled = false;
     this.trail = [];
     this.sparks = [];
     this.hitSparks = [];
@@ -1385,6 +1390,8 @@ class Ball {
     this.phase = BallPhase.ROCKET;
     this.hasThroatBoost = false;
     this.bombFuseTimer = 0;
+    this.wasLeftWalled = false;
+    this.wasRightWalled = false;
     this.trail = [];
     this.sparks = [];
     this.hitSparks = [];
@@ -1485,15 +1492,19 @@ class Ball {
     this.x += this.vx * travelRatio * dt;
     this.y += this.vy * dt;
 
-    // Fixed court boundary clamping (prevent rocket from leaving playable area)
-    const minBallX = 10;
-    const maxBallX = this.config.court.width - 10;
-    if (this.x < minBallX) {
-      this.x = minBallX;
-      if (this.vx < 0) this.vx = -this.vx * 0.8;
-    } else if (this.x > maxBallX) {
-      this.x = maxBallX;
-      if (this.vx > 0) this.vx = -this.vx * 0.8;
+    // Court side boundaries: Rocket clamps if missed; Bomb rebounds with playable speed off left/right walls
+    if (this.phase === BallPhase.ROCKET) {
+      const minBallX = 10;
+      const maxBallX = this.config.court.width - 10;
+      if (this.x < minBallX) {
+        this.x = minBallX;
+        if (this.vx < 0) this.vx = -this.vx * 0.8;
+      } else if (this.x > maxBallX) {
+        this.x = maxBallX;
+        if (this.vx > 0) this.vx = -this.vx * 0.8;
+      }
+    } else {
+      this.checkSideWallBounces();
     }
 
     // Orientation angle follows flight trajectory
@@ -1503,29 +1514,21 @@ class Ball {
     if (this.phase === BallPhase.BOMB) {
       this.bombFuseTimer -= dt;
 
-      // 1. Check if Bomb touches either player or their racket (Hot potato rule: touching loses!)
+      // 1. Check if Bomb touches either player or their racket (Touching loses!)
       const bombHitEvent = this.checkBombPlayerCollision(p1, p2);
       if (bombHitEvent) {
         return bombHitEvent;
       }
 
-      // 2. Check if a player avoided the bomb (bomb passes behind them without touching)
-      const avoidedEvent = this.checkBombAvoided(p1, p2);
-      if (avoidedEvent) {
-        return avoidedEvent;
-      }
-
-      // 3. If fuse expires without contact, award the point to the player who avoided it
+      // 2. If full 5 seconds expire without either player being hit, award one point to each player
       if (this.bombFuseTimer <= 0) {
+        this.bombFuseTimer = 0;
         this.inPlay = false;
         sound.playBombExplosion();
-        const side = this.x < court.centerX ? 'p1' : 'p2';
-        const scorer = side; // The player on this side avoided contact with the bomb!
-        const scorerName = scorer === 'p1' ? 'Player 1' : (this.config.mode === 'PVP' ? 'Player 2' : 'Computer');
         return {
           type: 'POINT_SCORED',
-          scorer,
-          reason: `✨ ${scorerName} avoided the bomb detonation! (Point to ${scorerName})`
+          scorer: 'both',
+          reason: '✨ Both players survived the 5s bomb! (1 point each)'
         };
       }
     } else {
@@ -1800,8 +1803,38 @@ class Ball {
   }
 
   /**
+   * Bomb Phase: Side-Wall Bounces
+   * Bomb bounces off the court's left and right sides while keeping a lively playable speed.
+   */
+  checkSideWallBounces() {
+    const minX = this.config.court.minX ?? 10;
+    const maxX = this.config.court.maxX ?? (this.config.court.width - 10);
+    const minSpeed = this.config.ball.minHorizontalSpeed ?? 300;
+
+    if (this.x - this.radius <= minX || this.x <= minX) {
+      this.x = minX + this.radius;
+      if (this.vx < 0) {
+        this.vx = Math.max(Math.abs(this.vx), minSpeed);
+        sound.playBounce(0.75);
+        this.emitRacketHitSparks(this.x, this.y);
+        return { type: 'WALL_BOUNCE', wall: 'left' };
+      }
+    } else if (this.x + this.radius >= maxX || this.x >= maxX) {
+      this.x = maxX - this.radius;
+      if (this.vx > 0) {
+        this.vx = -Math.max(Math.abs(this.vx), minSpeed);
+        sound.playBounce(0.75);
+        this.emitRacketHitSparks(this.x, this.y);
+        return { type: 'WALL_BOUNCE', wall: 'right' };
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Hot-Potato Bomb Collision Check:
-   * "If the bomb touches a player or their racket, or detonates on their side, that player loses the point."
+   * If the bomb touches a player or their racket during the 5s phase, that player loses the point.
    */
   checkBombPlayerCollision(p1, p2) {
     const testTouch = (player) => {
@@ -1831,6 +1864,7 @@ class Ball {
       return {
         type: 'POINT_SCORED',
         scorer: 'p2',
+        hitPlayer: 'p1',
         reason: '💥 Bomb touched Player 1! (Point to Player 2)'
       };
     }
@@ -1842,41 +1876,8 @@ class Ball {
       return {
         type: 'POINT_SCORED',
         scorer: 'p1',
+        hitPlayer: 'p2',
         reason: `💥 Bomb touched ${p2Name}! (Point to Player 1)`
-      };
-    }
-
-    return null;
-  }
-
-  /**
-   * Hot-Potato Bomb Avoidance Check:
-   * "If a player avoids the bomb and it passes or detonates without touching them, award that player the point."
-   */
-  checkBombAvoided(p1, p2) {
-    const p1Bounds = p1.getRacketBounds();
-    const p2Bounds = p2.getRacketBounds();
-
-    // Bomb passed past Player 1 without touching them -> Player 1 successfully avoided it!
-    if (this.vx < 0 && this.x < p1Bounds.overall.left - this.radius - 8) {
-      this.inPlay = false;
-      sound.playBombExplosion();
-      return {
-        type: 'POINT_SCORED',
-        scorer: 'p1',
-        reason: '✨ Player 1 avoided the bomb! (Point to Player 1)'
-      };
-    }
-
-    // Bomb passed past Player 2 without touching them -> Player 2 successfully avoided it!
-    if (this.vx > 0 && this.x > p2Bounds.overall.right + this.radius + 8) {
-      this.inPlay = false;
-      sound.playBombExplosion();
-      const p2Name = this.config.mode === 'PVP' ? 'Player 2' : 'Computer';
-      return {
-        type: 'POINT_SCORED',
-        scorer: 'p2',
-        reason: `✨ ${p2Name} avoided the bomb! (Point to ${p2Name})`
       };
     }
 
@@ -2174,9 +2175,14 @@ class ComputerOpponent {
   }
 
   /**
-   * Discrete forward trajectory simulation with arcade ground bounce mechanics
+   * Discrete forward trajectory simulation with arcade ground, ceiling, and side-wall bounce mechanics
    */
   predictTrajectoryAndTarget() {
+    if (this.perceivedBall.phase === 'BOMB') {
+      this.predictBombTrajectory();
+      return;
+    }
+
     const groundY = this.config.court.groundY;
     const racketX = this.player.getRacketX();
     const ballRadius = this.config.ball.radius;
@@ -2211,7 +2217,7 @@ class ComputerOpponent {
     let simTime = 0;
     const simDt = 0.014;
     const maxSimTime = 3.5;
-    const travelRatio = this.perceivedBall.phase === 'ROCKET' ? (this.config.ball.travelSpeedRatio ?? 0.82) : 1.0;
+    const travelRatio = this.config.ball.travelSpeedRatio ?? 0.82;
 
     while (simX < racketX && simTime < maxSimTime && simVx > 0) {
       simVy += ballGravity * simDt;
@@ -2243,31 +2249,122 @@ class ComputerOpponent {
 
     const arrivalY = simY + errorOffset;
 
-    // Phase-specific behavior with organic bounded variation:
-    if (this.perceivedBall.phase === 'BOMB') {
-      // HOT POTATO BOMB PHASE: CPU actively DODGES to avoid touching bomb!
-      // If bomb arrives low/mid, jump high to let it pass below!
-      // If bomb arrives high, duck to the floor to let it pass above!
+    // ROCKET PHASE: Varied intercept strategies within fair limits
+    // Randomly choose tactical alignment:
+    // 65% sweet spot target, 20% upper lob, 15% lower drive
+    const stratRoll = Math.random();
+    let strategicOffset = 0;
+    if (stratRoll < 0.20) {
+      strategicOffset = -12; // Aim upper frame for lofted return
+    } else if (stratRoll < 0.35) {
+      strategicOffset = 10;  // Aim lower frame for fast drive
+    } // Else 0: dead-center sweet spot return
+
+    this.targetY = Math.min(Math.max(arrivalY + strategicOffset, minY), maxY);
+  }
+
+  /**
+   * Bomb Phase: Forward trajectory prediction across 4-wall bounds
+   * Predicts incoming bomb passes accounting for left and right wall rebounds.
+   */
+  predictBombTrajectory() {
+    const groundY = this.config.court.groundY;
+    const ceilingY = this.config.court.ceilingY;
+    const minX = this.config.court.minX ?? 10;
+    const maxX = this.config.court.maxX ?? (this.config.court.width - 10);
+    const ballRadius = this.config.ball.radius;
+    const ballGravity = this.config.ball.gravity;
+    const arcadeBounce = this.config.ball.arcadeBounceImpulse;
+    const groundFriction = this.config.ball.groundFriction;
+    const minSpeed = this.config.ball.minHorizontalSpeed ?? 300;
+
+    const minY = ceilingY + this.player.height / 2;
+    const maxY = groundY - this.player.height / 2;
+
+    const cpuX = this.player.x;
+    const racketX = this.player.getRacketX();
+    const dangerLeft = Math.min(racketX, cpuX) - 25;
+    const dangerRight = Math.max(racketX, cpuX) + 25;
+
+    let simX = this.perceivedBall.x;
+    let simY = this.perceivedBall.y;
+    let simVx = this.perceivedBall.vx;
+    let simVy = this.perceivedBall.vy;
+    let simTime = 0;
+    const simDt = 0.015;
+    const maxSimTime = 2.8;
+
+    let predictedArrivalY = null;
+    let predictedArrivalTime = 1.0;
+
+    // Check if the bomb is currently already in the danger zone
+    if (simX >= dangerLeft && simX <= dangerRight) {
+      predictedArrivalY = simY;
+      predictedArrivalTime = 0;
+    } else {
+      while (simTime < maxSimTime) {
+        simVy += ballGravity * simDt;
+        simX += simVx * simDt;
+        simY += simVy * simDt;
+        simTime += simDt;
+
+        // Ceiling bounce
+        if (simY <= ceilingY + ballRadius) {
+          simY = ceilingY + ballRadius;
+          simVy = arcadeBounce;
+        }
+
+        // Ground bounce
+        if (simY >= groundY - ballRadius) {
+          simY = groundY - ballRadius;
+          simVy = -arcadeBounce;
+          simVx *= groundFriction;
+          if (Math.abs(simVx) < minSpeed && simVx !== 0) {
+            simVx = Math.sign(simVx) * minSpeed;
+          }
+        }
+
+        // Left wall bounce
+        if (simX <= minX + ballRadius) {
+          simX = minX + ballRadius;
+          simVx = Math.max(Math.abs(simVx), minSpeed);
+        }
+
+        // Right wall bounce
+        if (simX >= maxX - ballRadius) {
+          simX = maxX - ballRadius;
+          simVx = -Math.max(Math.abs(simVx), minSpeed);
+        }
+
+        // Check if entered danger zone
+        if (simX >= dangerLeft && simX <= dangerRight) {
+          predictedArrivalY = simY;
+          predictedArrivalTime = simTime;
+          break;
+        }
+      }
+    }
+
+    this.timeUntilArrival = predictedArrivalTime;
+
+    if (predictedArrivalY !== null) {
+      let errorOffset = 0;
+      if (Math.random() < this.config.ai.mistakeChance) {
+        errorOffset = (Math.random() - 0.5) * (this.config.ai.alignmentTolerance * 0.8);
+      }
+      const arrivalY = predictedArrivalY + errorOffset;
+
+      // Evasive jump strategy:
+      // If bomb arrives low/mid (> 280), jump high to let it pass below!
+      // If bomb arrives high (<= 280), duck down to the floor to let it pass above!
       if (arrivalY > 280) {
-        // Bounded evasion altitude variance (120px - 160px)
         const dodgeAltOffset = (Math.random() - 0.5) * 30;
         this.targetY = Math.max(minY + 20, minY + 40 + dodgeAltOffset);
       } else {
-        this.targetY = maxY; // Stay low on ground
+        this.targetY = maxY;
       }
     } else {
-      // ROCKET PHASE: Varied intercept strategies within fair limits
-      // Randomly choose tactical alignment:
-      // 65% sweet spot target, 20% upper lob, 15% lower drive
-      const stratRoll = Math.random();
-      let strategicOffset = 0;
-      if (stratRoll < 0.20) {
-        strategicOffset = -12; // Aim upper frame for lofted return
-      } else if (stratRoll < 0.35) {
-        strategicOffset = 10;  // Aim lower frame for fast drive
-      } // Else 0: dead-center sweet spot return
-
-      this.targetY = Math.min(Math.max(arrivalY + strategicOffset, minY), maxY);
+      this.targetY = maxY;
     }
   }
 
@@ -2279,17 +2376,22 @@ class ComputerOpponent {
 
     const currentY = this.player.y;
     const currentVy = this.player.vy;
-    const isBallApproaching = this.perceivedBall.inPlay && this.perceivedBall.vx > 0;
-
-    if (!isBallApproaching) {
-      return;
-    }
 
     // If in BOMB phase: actively dodge to reach evasion target altitude
     if (this.perceivedBall.phase === 'BOMB') {
-      if (currentY > this.targetY + 20 && currentVy >= -120) {
-        this.player.tapJump();
-        this.timeSinceLastTap = 0;
+      const maxY = this.config.court.groundY - this.player.height / 2;
+      const wantsToStayHigh = this.targetY < maxY - 60;
+
+      // Proximity emergency avoidance
+      const cpuX = this.player.x;
+      const distToBombX = Math.abs(this.perceivedBall.x - cpuX);
+      const isBombClose = distToBombX < 90;
+
+      if (wantsToStayHigh || (isBombClose && this.perceivedBall.y > currentY - 20)) {
+        if (currentY > this.targetY + 15 && currentVy >= -120) {
+          this.player.tapJump();
+          this.timeSinceLastTap = 0;
+        }
       }
       return;
     }
@@ -2685,9 +2787,12 @@ class TennisGame {
     this.stateTimer = 0;
     this.statusMessage = '';
 
-    // Hot-Potato 10-second Point Countdown
+    // Hot-Potato 10-second Point Countdown & 5-second Bomb Countdown
     this.pointCountdown = this.config.hotPotato.countdownSeconds;
+    this.bombCountdown = this.config.hotPotato.bombFuseDurationSec;
     this.lastTickSecond = Math.ceil(this.pointCountdown);
+    this.runWarningTimer = 0;
+    this.runWarningDuration = this.config.hotPotato.runWarningDurationSec ?? 1.4;
 
     // Visual miss diya effects and toasts
     this.diyaEffects = [];
@@ -2830,9 +2935,11 @@ class TennisGame {
     this.p2.reset();
     this.ai.reset();
 
-    // Reset 10-second point countdown
+    // Reset 10-second rocket countdown and 5-second bomb countdown
     this.pointCountdown = this.config.hotPotato.countdownSeconds;
+    this.bombCountdown = this.config.hotPotato.bombFuseDurationSec;
     this.lastTickSecond = Math.ceil(this.pointCountdown);
+    this.runWarningTimer = 0;
 
     const server = this.currentServer === 'p1' ? this.p1 : this.p2;
     const serverName = this.currentServer === 'p1' ? 'Player 1' : (this.mode === GameMode.PVC ? 'Computer' : 'Player 2');
@@ -2873,16 +2980,22 @@ class TennisGame {
     this.state = GameState.POINT_SCORED;
     this.stateTimer = this.config.gameplay.pointCelebrationMs / 1000;
     this.ball.inPlay = false;
+    this.runWarningTimer = 0;
 
     if (scorer === 'p1') {
       this.scoreP1++;
       this.statusMessage = `Point Player 1! ${reason}`;
       sound.playPointScored(true);
-    } else {
+    } else if (scorer === 'p2') {
       this.scoreP2++;
       const name = this.mode === GameMode.PVC ? 'CPU' : 'Player 2';
       this.statusMessage = `Point ${name}! ${reason}`;
       sound.playPointScored(false);
+    } else if (scorer === 'both') {
+      this.scoreP1++;
+      this.scoreP2++;
+      this.statusMessage = `Point for both! Both survived the bomb!`;
+      sound.playPointScored(true);
     }
 
     this.updateHUD();
@@ -2895,13 +3008,22 @@ class TennisGame {
     this.state = GameState.GAME_OVER;
     sound.playMatchWon();
 
-    const winnerName = this.scoreP1 > this.scoreP2 ? 'PLAYER 1' : (this.mode === GameMode.PVC ? 'COMPUTER' : 'PLAYER 2');
+    const isTie = this.scoreP1 === this.scoreP2;
+    const winnerName = this.scoreP1 > this.scoreP2
+      ? 'PLAYER 1'
+      : (this.scoreP2 > this.scoreP1
+          ? (this.mode === GameMode.PVC ? 'COMPUTER' : 'PLAYER 2')
+          : '');
     const winnerText = document.getElementById('winnerTitle');
     const finalScore = document.getElementById('finalScoreText');
     const gameOverOverlay = document.getElementById('gameOverOverlay');
 
-    if (winnerText) winnerText.textContent = `🪔 ${winnerName} WINS! 🪔`;
-    if (finalScore) finalScore.textContent = `Final Score: ${this.scoreP1} - ${this.scoreP2}`;
+    if (winnerText) {
+      winnerText.textContent = isTie ? '🪔 MATCH TIED! 🪔' : `🪔 ${winnerName} WINS! 🪔`;
+    }
+    if (finalScore) {
+      finalScore.textContent = `Final Score: ${this.scoreP1} - ${this.scoreP2}`;
+    }
     if (gameOverOverlay) gameOverOverlay.style.display = 'flex';
   }
 
@@ -2910,6 +3032,28 @@ class TennisGame {
     const p2ScoreEl = document.getElementById('scoreP2');
     if (p1ScoreEl) p1ScoreEl.textContent = this.scoreP1;
     if (p2ScoreEl) p2ScoreEl.textContent = this.scoreP2;
+
+    const hudCard = document.getElementById('hudTimerCard');
+    const hudLabel = document.getElementById('hudTimerLabel');
+    const hudValue = document.getElementById('hudTimerValue');
+
+    if (hudLabel && hudValue) {
+      const isBomb = this.ball && this.ball.phase === 'BOMB';
+      if (isBomb) {
+        hudLabel.textContent = 'BOMB';
+        hudValue.textContent = `${Math.max(0, this.bombCountdown).toFixed(1)}s`;
+        if (hudCard) {
+          hudCard.className = 'timer-card bomb-phase';
+        }
+      } else {
+        hudLabel.textContent = 'ROCKET';
+        hudValue.textContent = `${Math.max(0, this.pointCountdown).toFixed(1)}s`;
+        if (hudCard) {
+          const isWarning = this.pointCountdown <= (this.config.hotPotato?.warningThresholdSec ?? 3.5);
+          hudCard.className = isWarning ? 'timer-card rocket-warning' : 'timer-card';
+        }
+      }
+    }
   }
 
   gameLoop(currentTime) {
@@ -2981,24 +3125,32 @@ class TennisGame {
         break;
 
       case GameState.RALLY:
-        // Hot-Potato 10-second Point Countdown
-        this.pointCountdown -= dt;
+        if (this.ball.phase === 'ROCKET') {
+          // Hot-Potato 10-second Point Countdown
+          this.pointCountdown -= dt;
 
-        // Warning tick audio when under warning threshold in rocket phase
-        if (this.pointCountdown <= this.config.hotPotato.warningThresholdSec && this.pointCountdown > 0) {
-          const currentSecond = Math.ceil(this.pointCountdown);
-          if (currentSecond < this.lastTickSecond) {
-            this.lastTickSecond = currentSecond;
-            sound.playWarningTick();
+          // Warning tick audio when under warning threshold in rocket phase
+          if (this.pointCountdown <= this.config.hotPotato.warningThresholdSec && this.pointCountdown > 0) {
+            const currentSecond = Math.ceil(this.pointCountdown);
+            if (currentSecond < this.lastTickSecond) {
+              this.lastTickSecond = currentSecond;
+              sound.playWarningTick();
+            }
           }
-        }
 
-        // When countdown reaches 0: Transform into sudden-death Bomb!
-        if (this.pointCountdown <= 0) {
-          this.pointCountdown = 0;
-          if (this.ball.phase !== 'BOMB') {
+          // When 10s countdown reaches 0: Transform into sudden-death Bomb & show RUN! warning!
+          if (this.pointCountdown <= 0) {
+            this.pointCountdown = 0;
             this.ball.transformToBomb();
+            this.bombCountdown = this.config.hotPotato.bombFuseDurationSec;
+            this.runWarningTimer = this.runWarningDuration;
           }
+        } else {
+          // BOMB PHASE: 5-second countdown
+          if (this.runWarningTimer > 0) {
+            this.runWarningTimer -= dt;
+          }
+          this.bombCountdown = Math.max(0, this.ball.bombFuseTimer);
         }
 
         const rallyEvent = this.ball.update(dt, this.court, this.p1, this.p2);
@@ -3017,11 +3169,25 @@ class TennisGame {
                 rallyEvent.missVx,
                 rallyEvent.missVy
               );
-            } else {
-              // Point ended due to bomb contact or bomb evasion
-              const affectedPlayer = rallyEvent.scorer === 'p1' ? 'p2' : 'p1';
+            } else if (rallyEvent.hitPlayer) {
               this.triggerDiyaMissEffect(
-                affectedPlayer,
+                rallyEvent.hitPlayer,
+                this.ball.x,
+                this.ball.y,
+                this.ball.vx,
+                this.ball.vy
+              );
+            } else {
+              // Both survived or general burst
+              this.triggerDiyaMissEffect(
+                'p1',
+                this.ball.x,
+                this.ball.y,
+                this.ball.vx,
+                this.ball.vy
+              );
+              this.triggerDiyaMissEffect(
+                'p2',
                 this.ball.x,
                 this.ball.y,
                 this.ball.vx,
@@ -3046,6 +3212,9 @@ class TennisGame {
         }
         break;
     }
+
+    // Keep HUD timers synchronized
+    this.updateHUD();
   }
 
   render() {
@@ -3068,6 +3237,11 @@ class TennisGame {
     // 5. Hot-Potato Countdown & Sudden-Death Warning HUD
     if (this.state === GameState.RALLY || this.state === GameState.SERVING) {
       this.renderCountdownHUD();
+    }
+
+    // 5B. Prominent RUN! Dodge Warning Banner (when rocket transforms into bomb)
+    if (this.runWarningTimer > 0 && this.state === GameState.RALLY) {
+      this.renderRunWarning();
     }
 
     // 6. Brief toast message (Sweet shot, etc.)
@@ -3126,23 +3300,23 @@ class TennisGame {
     let textColor = '#0f172a';
 
     if (isBomb) {
-      badgeText = '💣 SUDDEN DEATH BOMB! DODGE TO WIN!';
+      badgeText = `💣 BOMB: ${Math.max(0, this.bombCountdown).toFixed(1)}s — DODGE!`;
       bgColor = '#fee2e2';
       borderColor = '#dc2626';
       textColor = '#991b1b';
     } else if (isWarning) {
-      badgeText = `⚠️ BOMB WARNING: ${this.pointCountdown.toFixed(1)}s!`;
+      badgeText = `⚠️ ROCKET WARNING: ${Math.max(0, this.pointCountdown).toFixed(1)}s!`;
       bgColor = '#fef3c7';
       borderColor = '#d97706';
       textColor = '#92400e';
     } else {
-      badgeText = `🚀 10s ROCKET RALLY: ${Math.max(0, this.pointCountdown).toFixed(1)}s`;
+      badgeText = `🚀 ROCKET: ${Math.max(0, this.pointCountdown).toFixed(1)}s`;
       bgColor = '#ffffff';
       borderColor = '#0f172a';
       textColor = '#0f172a';
     }
 
-    this.ctx.font = 'bold 13.5px "Plus Jakarta Sans", system-ui, sans-serif';
+    this.ctx.font = 'bold 14px "Plus Jakarta Sans", system-ui, sans-serif';
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
 
@@ -3166,6 +3340,43 @@ class TennisGame {
 
     this.ctx.fillStyle = textColor;
     this.ctx.fillText(badgeText, cx, cy);
+
+    this.ctx.restore();
+  }
+
+  renderRunWarning() {
+    if (this.runWarningTimer <= 0) return;
+
+    this.ctx.save();
+    const cx = this.config.court.width / 2;
+    const cy = 115;
+
+    const warningText = '⚠️ RUN! DODGE THE BOMB! ⚠️';
+    this.ctx.font = '900 22px "Plus Jakarta Sans", system-ui, sans-serif';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+
+    const textWidth = this.ctx.measureText(warningText).width;
+    const boxW = textWidth + 48;
+    const boxH = 46;
+
+    // Glowing red highlights
+    this.ctx.shadowColor = 'rgba(220, 38, 38, 0.55)';
+    this.ctx.shadowBlur = 22;
+    this.ctx.shadowOffsetY = 2;
+
+    this.ctx.fillStyle = '#fee2e2';
+    this.ctx.beginPath();
+    this.ctx.roundRect(cx - boxW / 2, cy - boxH / 2, boxW, boxH, 23);
+    this.ctx.fill();
+
+    this.ctx.shadowColor = 'transparent';
+    this.ctx.strokeStyle = '#dc2626';
+    this.ctx.lineWidth = 3;
+    this.ctx.stroke();
+
+    this.ctx.fillStyle = '#b91c1c';
+    this.ctx.fillText(warningText, cx, cy);
 
     this.ctx.restore();
   }

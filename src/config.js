@@ -12,6 +12,8 @@ export const DEFAULT_CONFIG = {
     baselineP1X: 110,     // Player 1 fixed baseline X
     baselineP2X: 890,     // Player 2 fixed baseline X
     ceilingY: 30,         // Top playable court boundary
+    minX: 10,             // Left playable court boundary
+    maxX: 990,            // Right playable court boundary (width - 10)
   },
 
   player: {
@@ -58,10 +60,11 @@ export const DEFAULT_CONFIG = {
 
   // Rocket and Hot-Potato Bomb Mechanics
   hotPotato: {
-    countdownSeconds: 10.0, // 10-second point countdown
-    warningThresholdSec: 3.5, // Warning threshold when time is running out
+    countdownSeconds: 10.0, // 10-second Rocket rally countdown
+    warningThresholdSec: 3.5, // Warning threshold when rocket time is running out
     bombSpeedMultiplier: 1.45, // Bomb sudden-death speed boost
-    bombFuseDurationSec: 5.0,  // Max sudden-death duration before detonation
+    bombFuseDurationSec: 5.0,  // Fresh 5-second Bomb countdown
+    runWarningDurationSec: 1.4,// Duration to display prominent RUN! dodge warning
   },
 
   ai: {

@@ -38,24 +38,33 @@ The racket features a recognizable tennis racket shape with 3 distinct collision
 
 ---
 
-## 🚀 Hot-Potato Point Mechanic (Rocket to Bomb)
+## 🚀 Hot-Potato Point Mechanic (Rocket to Bomb Phase)
 
-- **10-Second Countdown:** Each point features a prominent 10-second countdown in the center HUD.
-- **Rocket Phase (0 - 10s):**
-  - The ball flies as a festive Diwali firework rocket with trailing spark exhaust.
-  - Players rally using normal racket mechanics.
-- **Sudden-Death Bomb Phase (Time hits 0s):**
-  - When the countdown expires, the rocket transforms into an explosive **Diwali Bomb** with a speed boost!
-  - **Hot-Potato Penalty:** If the bomb touches a player or their racket, or detonates on their side, that player **loses the point**!
-  - **Bomb Evasion:** If a player avoids the bomb and it passes or detonates without touching them, that player **wins the point**!
-  - The countdown resets to 10 seconds at the start of each new serve.
+- **10-Second Rocket Phase (0 - 10s):**
+  - Projectile flies as a festive Diwali firework rocket with trailing spark exhaust.
+  - Players rally back and forth using normal racket mechanics.
+  - HUD displays a distinct Rocket countdown (`🚀 ROCKET: 10.0s`).
+- **Prominent “RUN!” Warning:**
+  - When the 10-second countdown ends, a prominent **“RUN!”** warning banner appears in red highlights alerting both players to dodge.
+  - Positioned clearly in the open court without obscuring the HUD timer or player positions.
+- **5-Second Sudden-Death Bomb Phase (5s fresh countdown):**
+  - Rocket transforms into an explosive **Diwali Bomb** with speed boost and starts a fresh, visible 5-second countdown in the HUD (`💣 BOMB: 5.0s`).
+  - **4-Wall Rebounds:** The bomb bounces off the court’s left and right sides (`minX = 10`, `maxX = 990`) as well as the ceiling and ground boundaries, maintaining active playable momentum throughout.
+  - **Hit-by-Bomb Penalty:** If the bomb touches one player or their racket during the 5 seconds, the point ends immediately and awards 1 point to the opponent.
+  - **Both-Survive Scoring:** If the full 5 seconds expire without either player being hit, 1 point is awarded to each player.
+  - **Deterministic Collision Resolution:** Collisions occurring on the exact frame the timer reaches zero take precedence over timer expiry, preventing duplicate scoring.
+  - **Point Reset & Match Flow:** Rocket timer (10s) and Bomb timer (5s) reset cleanly for every new point, preserving the first-to-five match flow, server alternation, score display, and both PvC and PvP game modes.
 
 ---
 
 ## 🤖 Smarter CPU Opponent
 
-- In PvC mode, the AI projects multi-bounce trajectories with arcade rebound physics to time jump impulses during the Rocket phase.
-- In the Bomb phase, the AI recognizes that touching the bomb causes it to lose, and **actively ducks or jumps to dodge incoming sudden-death bombs**!
+- **Rocket Phase:** Projects arcade trajectory arcs, manages human reaction delay (120ms) and tap cooldowns, and strategically alternates between sweet spot returns, upper lobs, and low drives.
+- **5-Second Bomb Phase & Rebound Adaptation:**
+  - Fully simulates the bomb's path incorporating left/right side-wall rebounds, ceiling rebounds, and ground bounces across actual court bounds.
+  - Calculates timely evasive jumps to dodge incoming bombs, ensuring clearance of both body and racket.
+  - Adapts in real time as the bomb rebounds off back walls and changes direction.
+  - Remains fallible and fair for human opponents through human reaction delay, tap cooldowns, and bounded physical jump physics.
 
 ---
 

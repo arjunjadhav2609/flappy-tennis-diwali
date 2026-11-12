@@ -240,9 +240,12 @@ export class TennisGame {
     this.stateTimer = 0;
     this.statusMessage = '';
 
-    // Hot-Potato 10-second Point Countdown
+    // Hot-Potato 10-second Point Countdown & 5-second Bomb Countdown
     this.pointCountdown = this.config.hotPotato.countdownSeconds;
+    this.bombCountdown = this.config.hotPotato.bombFuseDurationSec;
     this.lastTickSecond = Math.ceil(this.pointCountdown);
+    this.runWarningTimer = 0;
+    this.runWarningDuration = this.config.hotPotato.runWarningDurationSec ?? 1.4;
 
     // Visual miss diya effects and toasts
     this.diyaEffects = [];
@@ -385,9 +388,11 @@ export class TennisGame {
     this.p2.reset();
     this.ai.reset();
 
-    // Reset 10-second point countdown
+    // Reset 10-second rocket countdown and 5-second bomb countdown
     this.pointCountdown = this.config.hotPotato.countdownSeconds;
+    this.bombCountdown = this.config.hotPotato.bombFuseDurationSec;
     this.lastTickSecond = Math.ceil(this.pointCountdown);
+    this.runWarningTimer = 0;
 
     const server = this.currentServer === 'p1' ? this.p1 : this.p2;
     const serverName = this.currentServer === 'p1' ? 'Player 1' : (this.mode === GameMode.PVC ? 'Computer' : 'Player 2');
@@ -428,16 +433,22 @@ export class TennisGame {
     this.state = GameState.POINT_SCORED;
     this.stateTimer = this.config.gameplay.pointCelebrationMs / 1000;
     this.ball.inPlay = false;
+    this.runWarningTimer = 0;
 
     if (scorer === 'p1') {
       this.scoreP1++;
       this.statusMessage = `Point Player 1! ${reason}`;
       sound.playPointScored(true);
-    } else {
+    } else if (scorer === 'p2') {
       this.scoreP2++;
       const name = this.mode === GameMode.PVC ? 'CPU' : 'Player 2';
       this.statusMessage = `Point ${name}! ${reason}`;
       sound.playPointScored(false);
+    } else if (scorer === 'both') {
+      this.scoreP1++;
+      this.scoreP2++;
+      this.statusMessage = `Point for both! Both survived the bomb!`;
+      sound.playPointScored(true);
     }
 
     this.updateHUD();
@@ -450,13 +461,22 @@ export class TennisGame {
     this.state = GameState.GAME_OVER;
     sound.playMatchWon();
 
-    const winnerName = this.scoreP1 > this.scoreP2 ? 'PLAYER 1' : (this.mode === GameMode.PVC ? 'COMPUTER' : 'PLAYER 2');
+    const isTie = this.scoreP1 === this.scoreP2;
+    const winnerName = this.scoreP1 > this.scoreP2
+      ? 'PLAYER 1'
+      : (this.scoreP2 > this.scoreP1
+          ? (this.mode === GameMode.PVC ? 'COMPUTER' : 'PLAYER 2')
+          : '');
     const winnerText = document.getElementById('winnerTitle');
     const finalScore = document.getElementById('finalScoreText');
     const gameOverOverlay = document.getElementById('gameOverOverlay');
 
-    if (winnerText) winnerText.textContent = `🪔 ${winnerName} WINS! 🪔`;
-    if (finalScore) finalScore.textContent = `Final Score: ${this.scoreP1} - ${this.scoreP2}`;
+    if (winnerText) {
+      winnerText.textContent = isTie ? '🪔 MATCH TIED! 🪔' : `🪔 ${winnerName} WINS! 🪔`;
+    }
+    if (finalScore) {
+      finalScore.textContent = `Final Score: ${this.scoreP1} - ${this.scoreP2}`;
+    }
     if (gameOverOverlay) gameOverOverlay.style.display = 'flex';
   }
 
@@ -465,6 +485,28 @@ export class TennisGame {
     const p2ScoreEl = document.getElementById('scoreP2');
     if (p1ScoreEl) p1ScoreEl.textContent = this.scoreP1;
     if (p2ScoreEl) p2ScoreEl.textContent = this.scoreP2;
+
+    const hudCard = document.getElementById('hudTimerCard');
+    const hudLabel = document.getElementById('hudTimerLabel');
+    const hudValue = document.getElementById('hudTimerValue');
+
+    if (hudLabel && hudValue) {
+      const isBomb = this.ball && this.ball.phase === 'BOMB';
+      if (isBomb) {
+        hudLabel.textContent = 'BOMB';
+        hudValue.textContent = `${Math.max(0, this.bombCountdown).toFixed(1)}s`;
+        if (hudCard) {
+          hudCard.className = 'timer-card bomb-phase';
+        }
+      } else {
+        hudLabel.textContent = 'ROCKET';
+        hudValue.textContent = `${Math.max(0, this.pointCountdown).toFixed(1)}s`;
+        if (hudCard) {
+          const isWarning = this.pointCountdown <= (this.config.hotPotato?.warningThresholdSec ?? 3.5);
+          hudCard.className = isWarning ? 'timer-card rocket-warning' : 'timer-card';
+        }
+      }
+    }
   }
 
   gameLoop(currentTime) {
@@ -536,24 +578,32 @@ export class TennisGame {
         break;
 
       case GameState.RALLY:
-        // Hot-Potato 10-second Point Countdown
-        this.pointCountdown -= dt;
+        if (this.ball.phase === 'ROCKET') {
+          // Hot-Potato 10-second Point Countdown
+          this.pointCountdown -= dt;
 
-        // Warning tick audio when under warning threshold in rocket phase
-        if (this.pointCountdown <= this.config.hotPotato.warningThresholdSec && this.pointCountdown > 0) {
-          const currentSecond = Math.ceil(this.pointCountdown);
-          if (currentSecond < this.lastTickSecond) {
-            this.lastTickSecond = currentSecond;
-            sound.playWarningTick();
+          // Warning tick audio when under warning threshold in rocket phase
+          if (this.pointCountdown <= this.config.hotPotato.warningThresholdSec && this.pointCountdown > 0) {
+            const currentSecond = Math.ceil(this.pointCountdown);
+            if (currentSecond < this.lastTickSecond) {
+              this.lastTickSecond = currentSecond;
+              sound.playWarningTick();
+            }
           }
-        }
 
-        // When countdown reaches 0: Transform into sudden-death Bomb!
-        if (this.pointCountdown <= 0) {
-          this.pointCountdown = 0;
-          if (this.ball.phase !== 'BOMB') {
+          // When 10s countdown reaches 0: Transform into sudden-death Bomb & show RUN! warning!
+          if (this.pointCountdown <= 0) {
+            this.pointCountdown = 0;
             this.ball.transformToBomb();
+            this.bombCountdown = this.config.hotPotato.bombFuseDurationSec;
+            this.runWarningTimer = this.runWarningDuration;
           }
+        } else {
+          // BOMB PHASE: 5-second countdown
+          if (this.runWarningTimer > 0) {
+            this.runWarningTimer -= dt;
+          }
+          this.bombCountdown = Math.max(0, this.ball.bombFuseTimer);
         }
 
         const rallyEvent = this.ball.update(dt, this.court, this.p1, this.p2);
@@ -572,11 +622,25 @@ export class TennisGame {
                 rallyEvent.missVx,
                 rallyEvent.missVy
               );
-            } else {
-              // Point ended due to bomb contact or bomb evasion
-              const affectedPlayer = rallyEvent.scorer === 'p1' ? 'p2' : 'p1';
+            } else if (rallyEvent.hitPlayer) {
               this.triggerDiyaMissEffect(
-                affectedPlayer,
+                rallyEvent.hitPlayer,
+                this.ball.x,
+                this.ball.y,
+                this.ball.vx,
+                this.ball.vy
+              );
+            } else {
+              // Both survived or general burst
+              this.triggerDiyaMissEffect(
+                'p1',
+                this.ball.x,
+                this.ball.y,
+                this.ball.vx,
+                this.ball.vy
+              );
+              this.triggerDiyaMissEffect(
+                'p2',
                 this.ball.x,
                 this.ball.y,
                 this.ball.vx,
@@ -601,6 +665,9 @@ export class TennisGame {
         }
         break;
     }
+
+    // Keep HUD timers synchronized
+    this.updateHUD();
   }
 
   render() {
@@ -623,6 +690,11 @@ export class TennisGame {
     // 5. Hot-Potato Countdown & Sudden-Death Warning HUD
     if (this.state === GameState.RALLY || this.state === GameState.SERVING) {
       this.renderCountdownHUD();
+    }
+
+    // 5B. Prominent RUN! Dodge Warning Banner (when rocket transforms into bomb)
+    if (this.runWarningTimer > 0 && this.state === GameState.RALLY) {
+      this.renderRunWarning();
     }
 
     // 6. Brief toast message (Sweet shot, etc.)
@@ -681,23 +753,23 @@ export class TennisGame {
     let textColor = '#0f172a';
 
     if (isBomb) {
-      badgeText = '💣 SUDDEN DEATH BOMB! DODGE TO WIN!';
+      badgeText = `💣 BOMB: ${Math.max(0, this.bombCountdown).toFixed(1)}s — DODGE!`;
       bgColor = '#fee2e2';
       borderColor = '#dc2626';
       textColor = '#991b1b';
     } else if (isWarning) {
-      badgeText = `⚠️ BOMB WARNING: ${this.pointCountdown.toFixed(1)}s!`;
+      badgeText = `⚠️ ROCKET WARNING: ${Math.max(0, this.pointCountdown).toFixed(1)}s!`;
       bgColor = '#fef3c7';
       borderColor = '#d97706';
       textColor = '#92400e';
     } else {
-      badgeText = `🚀 10s ROCKET RALLY: ${Math.max(0, this.pointCountdown).toFixed(1)}s`;
+      badgeText = `🚀 ROCKET: ${Math.max(0, this.pointCountdown).toFixed(1)}s`;
       bgColor = '#ffffff';
       borderColor = '#0f172a';
       textColor = '#0f172a';
     }
 
-    this.ctx.font = 'bold 13.5px "Plus Jakarta Sans", system-ui, sans-serif';
+    this.ctx.font = 'bold 14px "Plus Jakarta Sans", system-ui, sans-serif';
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
 
@@ -721,6 +793,43 @@ export class TennisGame {
 
     this.ctx.fillStyle = textColor;
     this.ctx.fillText(badgeText, cx, cy);
+
+    this.ctx.restore();
+  }
+
+  renderRunWarning() {
+    if (this.runWarningTimer <= 0) return;
+
+    this.ctx.save();
+    const cx = this.config.court.width / 2;
+    const cy = 115;
+
+    const warningText = '⚠️ RUN! DODGE THE BOMB! ⚠️';
+    this.ctx.font = '900 22px "Plus Jakarta Sans", system-ui, sans-serif';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+
+    const textWidth = this.ctx.measureText(warningText).width;
+    const boxW = textWidth + 48;
+    const boxH = 46;
+
+    // Glowing red highlights
+    this.ctx.shadowColor = 'rgba(220, 38, 38, 0.55)';
+    this.ctx.shadowBlur = 22;
+    this.ctx.shadowOffsetY = 2;
+
+    this.ctx.fillStyle = '#fee2e2';
+    this.ctx.beginPath();
+    this.ctx.roundRect(cx - boxW / 2, cy - boxH / 2, boxW, boxH, 23);
+    this.ctx.fill();
+
+    this.ctx.shadowColor = 'transparent';
+    this.ctx.strokeStyle = '#dc2626';
+    this.ctx.lineWidth = 3;
+    this.ctx.stroke();
+
+    this.ctx.fillStyle = '#b91c1c';
+    this.ctx.fillText(warningText, cx, cy);
 
     this.ctx.restore();
   }

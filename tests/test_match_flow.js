@@ -44,6 +44,8 @@ class HeadlessGame {
     this.state = GameState.SERVING;
     this.stateTimer = this.config.gameplay.serveCountdownMs / 1000;
     this.pointCountdown = this.config.hotPotato.countdownSeconds;
+    const server = this.currentServer === 'p1' ? this.p1 : this.p2;
+    this.ball.prepareHover(this.currentServer, server.getRacketX(), server.y - 65);
   }
 
   executeServe() {
@@ -60,7 +62,10 @@ class HeadlessGame {
 
     if (scorer === 'p1') {
       this.scoreP1++;
-    } else {
+    } else if (scorer === 'p2') {
+      this.scoreP2++;
+    } else if (scorer === 'both') {
+      this.scoreP1++;
       this.scoreP2++;
     }
     this.currentServer = this.currentServer === 'p1' ? 'p2' : 'p1';
@@ -159,6 +164,42 @@ for (let step = 0; step < 10; step++) {
 assert.strictEqual(game.state, GameState.POINT_SCORED, 'Touching bomb ends rally immediately');
 assert.strictEqual(game.scoreP2, 1, 'Point awarded to Player 2 when bomb touches Player 1');
 console.log(`✓ Hot-Potato sudden death point awarded to P2. Score: P1=${game.scoreP1}, P2=${game.scoreP2}.`);
+
+// 5B. Test Point Reset and Alternate Serve Flow
+while (game.state === GameState.POINT_SCORED) {
+  game.step(0.02);
+}
+assert.strictEqual(game.state, GameState.SERVING, 'Game must advance to SERVING state for next point');
+assert.strictEqual(game.currentServer, 'p2', 'Server must alternate to p2');
+assert.strictEqual(game.pointCountdown, game.config.hotPotato.countdownSeconds, 'Rocket timer must reset to 10s for new point');
+assert.strictEqual(game.ball.phase, BallPhase.ROCKET, 'Ball must reset to ROCKET phase for new point');
+console.log('✓ Point reset verified: 10s timer, 5s bomb timer, server alternation (P2), and ROCKET phase restored.');
+
+// 5C. Test Both Survive 5s Bomb Flow: Point awarded to both players
+while (game.state === GameState.SERVING) {
+  game.step(0.02);
+}
+assert.strictEqual(game.state, GameState.RALLY);
+// Fast forward rocket timer to 0 to trigger bomb phase
+game.pointCountdown = 0.02;
+game.step(0.03);
+assert.strictEqual(game.ball.phase, BallPhase.BOMB);
+assert(Math.abs(game.ball.bombFuseTimer - 5.0) < 0.05, 'Bomb countdown starts at fresh 5.0 seconds');
+
+// Fast forward 5s bomb fuse to expiration while dodging
+game.ball.bombFuseTimer = 0.02;
+game.p1.y = 80;
+game.p2.y = 80;
+game.ball.x = 500;
+game.ball.y = 300;
+
+while (game.state === GameState.RALLY) {
+  game.step(0.02);
+}
+assert.strictEqual(game.state, GameState.POINT_SCORED);
+assert.strictEqual(game.scoreP1, 1, 'Player 1 awarded 1 point for surviving bomb');
+assert.strictEqual(game.scoreP2, 2, 'Player 2 awarded 1 point for surviving bomb');
+console.log(`✓ Both-survive match flow verified: Both awarded 1 point! Score: P1=${game.scoreP1}, P2=${game.scoreP2}.`);
 
 // 6. Complete match to victory (First to 5 points)
 while (game.state !== GameState.GAME_OVER) {
