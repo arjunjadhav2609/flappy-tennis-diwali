@@ -64,48 +64,67 @@
           <div class="card-marigold-trim"></div>
           <div class="hero-badge">🪔 DIWALI GRAND FESTIVAL 🪔</div>
           <h2>FLAPPY DIWALI TENNIS</h2>
-          <p class="subtitle">Vertical impulse tennis with 1.5× energetic arcade rebounds, centered super-shot target zones, straight cylindrical handles, and a 10-second Rocket-to-Bomb sudden death!</p>
+          <div class="objective-banner">
+            <span class="objective-icon">🏆</span>
+            <div class="objective-text">
+              <strong>MATCH OBJECTIVE</strong>
+              <span>First to 5 Points Wins the Festival Crown!</span>
+              <small>Score rally winners or survive the 5-second sudden-death bomb!</small>
+            </div>
+          </div>
 
           <div class="mode-select-group">
-            <span class="group-label">SELECT GAME MODE</span>
+            <span class="group-label">CHOOSE YOUR CHALLENGE</span>
             <div class="mode-buttons">
               <button id="btnModePvC" class="mode-btn active">
                 <span class="mode-icon">🤖</span>
                 <span class="mode-text">
-                  <strong>Player vs Computer</strong>
-                  <small>Tactical AI tracks rockets & dodges bombs</small>
+                  <span class="mode-title-row">
+                    <strong>Player vs Computer</strong>
+                    <span class="mode-badge solo-badge">SOLO</span>
+                  </span>
+                  <small>Capable AI rallies rockets & dodges varied dynamic rebounds</small>
                 </span>
+                <span class="mode-check">✓</span>
               </button>
               <button id="btnModePvP" class="mode-btn">
                 <span class="mode-icon">👥</span>
                 <span class="mode-text">
-                  <strong>Player vs Player</strong>
-                  <small>2 players on the same device</small>
+                  <span class="mode-title-row">
+                    <strong>Player vs Player</strong>
+                    <span class="mode-badge pvp-badge">2-PLAYER</span>
+                  </span>
+                  <small>Two players on the same device with split controls</small>
                 </span>
+                <span class="mode-check">✓</span>
               </button>
             </div>
           </div>
 
           <div class="rules-summary diwali-rules">
-            <div class="rule-col">
-              <strong>🚀 10s Rocket Phase</strong>
-              <span>Rally the rocket! Jump to serve. 1.5× arcade ground & ceiling rebounds keep the rocket alive.</span>
+            <div class="rule-col phase-rocket-col">
+              <strong>🚀 Phase 1: 10s Rocket Rally</strong>
+              <span>Tap jump to return the rocket. Oval sweet-spot strings unleash blazing ⚡1.4× Super Shots!</span>
             </div>
-            <div class="rule-col">
-              <strong>💣 5s Bomb Phase & Rebounds</strong>
-              <span>At 0s, prominent “RUN!” warning alerts players as rocket becomes a bomb! It rebounds off all 4 walls. Touching it loses; survive 5s to score 1 pt each!</span>
+            <div class="rule-col phase-bomb-col">
+              <strong>💣 Phase 2: 5s Bomb Dodge</strong>
+              <span>At 0s, “RUN!” sounds! Bomb ricochets off all 4 walls. Touching it loses; dodge 5s to score 1 pt each!</span>
             </div>
-            <div class="rule-col">
-              <strong>⚡ Super-Shot Target Zone</strong>
-              <span>Hit the luminous target zone on strings for a fast super-shot return.</span>
+            <div class="rule-col p1-control-col">
+              <strong>🔷 Player 1 (Sapphire)</strong>
+              <span>Press <kbd>W</kbd> or <kbd>Space</kbd> or Tap Left court</span>
             </div>
-            <div class="rule-col">
-              <strong>🎮 Controls</strong>
-              <span>P1: [ W ] / Space / Tap Left &nbsp;|&nbsp; P2: [ ▲ ] / Enter / Tap Right</span>
+            <div class="rule-col p2-control-col">
+              <strong>🔶 Player 2 / CPU (Ruby)</strong>
+              <span>Press <kbd>▲ Up</kbd> or <kbd>Enter</kbd> or Tap Right court</span>
             </div>
           </div>
 
-          <button id="btnStartMatch" class="btn-primary start-btn">PLAY MATCH (FIRST TO 5)</button>
+          <div class="mobile-controls-hint">
+            <span>📱 <strong>Mobile:</strong> Tap left or right half of the court to jump!</span>
+          </div>
+
+          <button id="btnStartMatch" class="btn-primary start-btn">PLAY MATCH (FIRST TO 5) 🪔</button>
         </div>
       </div>
 

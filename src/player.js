@@ -222,7 +222,7 @@ export class Player {
     return null;
   }
 
-  draw(ctx, score = 0, displayName = null) {
+  draw(ctx, score = 0, displayName = null, isBombPhase = false) {
     const rx = this.getRacketX();
     const groundY = this.config.court.groundY;
 
@@ -241,16 +241,16 @@ export class Player {
     // 2. Tennis Racket (Oval Head + Direct Straight Cylindrical Handle)
     this.drawRacket(ctx, rx);
 
-    // 3. Player Character in Festive Diwali Attire
-    this.drawFestiveCharacter(ctx);
+    // 3. Player Character in Festive Diwali Attire & Expressive Silhouette
+    this.drawFestiveCharacter(ctx, isBombPhase);
 
     // 4. Polished overhead character HUD (Role, Score, Power-up Readiness)
-    this.drawCharacterUI(ctx, score, displayName);
+    this.drawCharacterUI(ctx, score, displayName, isBombPhase);
 
     ctx.restore();
   }
 
-  drawCharacterUI(ctx, score, displayName) {
+  drawCharacterUI(ctx, score, displayName, isBombPhase = false) {
     const isP1 = this.id === 'p1';
     const roleText = displayName || (isP1 ? 'PLAYER 1' : 'CPU');
     const isSuperActive = this.hitEffectTimer > 0 && this.hitZoneType === 'SWEET_SPOT';
@@ -279,8 +279,8 @@ export class Player {
     ctx.shadowColor = 'transparent';
 
     // Crisp high-contrast outline with player accent color
-    ctx.strokeStyle = isSuperActive ? '#f59e0b' : (isP1 ? '#2563eb' : '#dc2626');
-    ctx.lineWidth = isSuperActive ? 2.2 : 1.6;
+    ctx.strokeStyle = isBombPhase ? '#dc2626' : (isSuperActive ? '#f59e0b' : (isP1 ? '#2563eb' : '#dc2626'));
+    ctx.lineWidth = (isSuperActive || isBombPhase) ? 2.2 : 1.6;
     ctx.stroke();
 
     // Player Role / Name
@@ -305,9 +305,13 @@ export class Player {
     ctx.textAlign = 'center';
     ctx.fillText(score.toString(), 19, 0.5);
 
-    // Power-Up Readiness Indicator (⚡READY / ⚡SUPER!)
+    // Power-Up / Phase Indicator (⚡READY / ⚡SUPER! / 💣DODGE!)
     ctx.textAlign = 'right';
-    if (isSuperActive) {
+    if (isBombPhase) {
+      ctx.font = 'bold 8px "Plus Jakarta Sans", system-ui, sans-serif';
+      ctx.fillStyle = '#dc2626';
+      ctx.fillText('💣DODGE', badgeW / 2 - 6, 0);
+    } else if (isSuperActive) {
       ctx.font = 'bold 8.5px "Plus Jakarta Sans", system-ui, sans-serif';
       ctx.fillStyle = '#d97706';
       ctx.fillText('⚡SUPER', badgeW / 2 - 6, 0);
@@ -328,6 +332,15 @@ export class Player {
 
     ctx.save();
 
+    // Dynamic Racket Swing & Follow-through impact animation
+    if (isHitting) {
+      const swingProgress = this.hitEffectTimer / 0.18;
+      const swingAngle = Math.sin(swingProgress * Math.PI) * (this.isFacingRight ? 0.18 : -0.18);
+      ctx.translate(rx, rb.handle.centerY);
+      ctx.rotate(swingAngle);
+      ctx.translate(-rx, -rb.handle.centerY);
+    }
+
     // Arm connection to handle
     ctx.strokeStyle = '#0f172a'; // Arm outline
     ctx.lineWidth = 6;
@@ -341,6 +354,17 @@ export class Player {
 
     ctx.strokeStyle = '#fed7aa'; // Arm skin
     ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Sporty wristband
+    const wristColor = this.isFacingRight ? '#2563eb' : '#dc2626';
+    const wristX = armX * 0.35 + rx * 0.65;
+    const wristY = armY * 0.35 + rb.handle.centerY * 0.65;
+    ctx.strokeStyle = wristColor;
+    ctx.lineWidth = 4.5;
+    ctx.beginPath();
+    ctx.moveTo(wristX - 2, wristY - 2);
+    ctx.lineTo(wristX + 2, wristY + 2);
     ctx.stroke();
 
     // 1. Straight Cylindrical Handle (connected directly to bottom of frame, no neck)
@@ -487,8 +511,19 @@ export class Player {
     ctx.lineWidth = 0.8;
     ctx.stroke();
 
-    // Sweet spot super-shot starburst cue
+    // Sweet spot super-shot starburst cue and expanding impact shockwave ring
     if (isSweetSpotHit) {
+      // Expanding golden impact shockwave ring
+      const progress = 1 - (this.hitEffectTimer / 0.18);
+      const ringRadius = 12 + progress * 24;
+      const ringAlpha = (1 - progress) * 0.75;
+      ctx.strokeStyle = `rgba(245, 158, 11, ${ringAlpha})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(hd.centerX, hd.centerY, ringRadius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Starburst rays
       ctx.strokeStyle = '#f59e0b';
       ctx.lineWidth = 2.2;
       for (let a = 0; a < 8; a++) {
@@ -503,19 +538,37 @@ export class Player {
     ctx.restore();
   }
 
-  drawFestiveCharacter(ctx) {
+  drawFestiveCharacter(ctx, isBombPhase = false) {
     ctx.save();
     ctx.translate(this.x, this.y);
 
+    const dir = this.isFacingRight ? 1 : -1;
+    const isP1 = this.id === 'p1';
+    const isHitting = this.hitEffectTimer > 0;
+    const isSweetSpotHit = isHitting && this.hitZoneType === 'SWEET_SPOT';
+
+    // Expressive dynamic squash, stretch, and movement tilt
     let scaleX = 1;
     let scaleY = 1;
+    let tiltAngle = 0;
     if (this.jumpSquashTimer > 0) {
-      scaleY = 1.15;
-      scaleX = 0.9;
+      // Crisp athletic launch stretch
+      scaleY = 1.18;
+      scaleX = 0.86;
+      tiltAngle = dir * 0.08;
+    } else if (this.vy < -70) {
+      // Athletic rising posture
+      scaleY = 1.08;
+      scaleX = 0.93;
+      tiltAngle = dir * 0.05;
+    } else if (this.vy > 120) {
+      // Landing / descent compression squash
+      scaleY = 0.91;
+      scaleX = 1.08;
     }
+    ctx.rotate(tiltAngle);
     ctx.scale(scaleX, scaleY);
 
-    const dir = this.isFacingRight ? 1 : -1;
     const halfW = this.width / 2;
     const halfH = this.height / 2;
 
@@ -534,16 +587,24 @@ export class Player {
     ctx.fillStyle = this.kurtaTrim;
     ctx.fillRect(-halfW + 5, -halfH + 18, this.width - 10, 3.5);
 
-    // Diagonal golden sash with outline
-    ctx.strokeStyle = '#f59e0b';
-    ctx.lineWidth = 3;
+    // Diagonal sash with distinctive character accents
+    ctx.strokeStyle = isP1 ? '#f59e0b' : '#059669'; // Saffron gold for P1, Emerald silk for P2
+    ctx.lineWidth = 3.2;
     ctx.beginPath();
     ctx.moveTo(-halfW + 6, -halfH + 20);
     ctx.lineTo(halfW - 6, 12);
     ctx.stroke();
 
+    // Secondary trim line on sash for royal richness
+    ctx.strokeStyle = isP1 ? '#fde68a' : '#34d399';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-halfW + 7, -halfH + 21);
+    ctx.lineTo(halfW - 7, 11);
+    ctx.stroke();
+
     // 2. Traditional Churidar / Silk Dhoti Pants
-    ctx.fillStyle = '#f8fafc';
+    ctx.fillStyle = isP1 ? '#f8fafc' : '#f1f5f9';
     ctx.fillRect(-halfW + 6, 6, this.width - 12, 12);
     ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = 1.4;
@@ -556,11 +617,11 @@ export class Player {
     ctx.strokeRect(-8, 18, 5, 12);
     ctx.strokeRect(3, 18, 5, 12);
 
-    // Festive golden mojari / shoes
+    // Festive golden mojari / shoes with curled toe tips
     ctx.fillStyle = this.shoeColor;
     ctx.fillRect(-10, 26, 8, 5);
     ctx.fillRect(2, 26, 8, 5);
-    ctx.fillStyle = '#ea580c';
+    ctx.fillStyle = isP1 ? '#ea580c' : '#991b1b';
     ctx.fillRect(-10, 29, 8, 2);
     ctx.fillRect(2, 29, 8, 2);
     ctx.strokeStyle = '#0f172a';
@@ -568,7 +629,7 @@ export class Player {
     ctx.strokeRect(-10, 26, 8, 5);
     ctx.strokeRect(2, 26, 8, 5);
 
-    // 3. Head & Festive Turban / Pagri
+    // 3. Head & Distinct Festive Turban / Pagri Silhouettes
     const headY = -halfH + 9;
     ctx.fillStyle = '#fed7aa';
     ctx.beginPath();
@@ -578,25 +639,208 @@ export class Player {
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Royal Festive Pagri / Turban
+    // Royal Festive Pagri / Turban base
     ctx.fillStyle = this.turbanColor;
     ctx.beginPath();
     ctx.ellipse(0, headY - 4, 13, 7, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Turban Golden Brooch / Kalgi
-    ctx.fillStyle = '#fbbf24';
-    ctx.beginPath();
-    ctx.arc(dir * 5, headY - 8, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    // Distinct character turban ornaments & silhouettes:
+    if (isP1) {
+      // P1: Tall upward-sweeping royal Kalgi feather plume silhouette
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.moveTo(dir * 5, headY - 8);
+      ctx.quadraticCurveTo(dir * 8, headY - 20, dir * 4, headY - 24);
+      ctx.quadraticCurveTo(dir * 1, headY - 16, dir * 4, headY - 8);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
 
-    // Eye looking forward
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath();
-    ctx.arc(dir * 5, headY, 2, 0, Math.PI * 2);
-    ctx.fill();
+      // Secondary feather plume ridge
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.moveTo(dir * 4, headY - 9);
+      ctx.quadraticCurveTo(dir * 6, headY - 18, dir * 3.5, headY - 22);
+      ctx.lineTo(dir * 4, headY - 9);
+      ctx.fill();
+
+      // Plume sapphire gem
+      ctx.fillStyle = '#2563eb';
+      ctx.beginPath();
+      ctx.arc(dir * 5, headY - 8, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    } else {
+      // P2: Flared regal crown with emerald peacock aigrette brooch curved to side
+      ctx.fillStyle = '#059669'; // Emerald aigrette
+      ctx.beginPath();
+      ctx.moveTo(dir * 5, headY - 8);
+      ctx.quadraticCurveTo(dir * 11, headY - 18, dir * 8, headY - 22);
+      ctx.quadraticCurveTo(dir * 3, headY - 16, dir * 4, headY - 8);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Golden aigrette accent
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.moveTo(dir * 4, headY - 9);
+      ctx.quadraticCurveTo(dir * 8, headY - 16, dir * 6, headY - 20);
+      ctx.lineTo(dir * 4, headY - 9);
+      ctx.fill();
+
+      // Ruby brooch cabochon
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.arc(dir * 5, headY - 8, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+
+    // 4. Dynamic Facial Expression: Alarmed Dodge vs Starburst Super vs Hit Wink vs Focused Play
+    if (isBombPhase) {
+      // 💣 BOMB PHASE: High-tension wide alarmed eyes, high arched brow, and panic sweat bead!
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(dir * 5, headY - 1, 4.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+
+      // Dilated alarmed pupil
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(dir * (5 + (dir > 0 ? 0.8 : -0.8)), headY - 1, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // High arched anxious eyebrow
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(dir * 2, headY - 7);
+      ctx.lineTo(dir * 7, headY - 6);
+      ctx.stroke();
+
+      // Stylized panic sweat bead above brow
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(dir * 9, headY - 9, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Tense focused mouth
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(dir * 2, headY + 5);
+      ctx.lineTo(dir * 5, headY + 4);
+      ctx.lineTo(dir * 7, headY + 5.5);
+      ctx.stroke();
+    } else if (isSweetSpotHit) {
+      // ⚡ SWEET SPOT HIT: Radiant starburst glint eye and big victorious athletic smile!
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(dir * 5, headY, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Golden 4-point star in pupil
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      const sx = dir * 5, sy = headY;
+      ctx.moveTo(sx, sy - 3);
+      ctx.lineTo(sx + 1, sy - 1);
+      ctx.lineTo(sx + 3, sy);
+      ctx.lineTo(sx + 1, sy + 1);
+      ctx.lineTo(sx, sy + 3);
+      ctx.lineTo(sx - 1, sy + 1);
+      ctx.lineTo(sx - 3, sy);
+      ctx.lineTo(sx - 1, sy - 1);
+      ctx.closePath();
+      ctx.fill();
+
+      // Radiant smile
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(dir * 3.5, headY + 4.5, 3.5, 0.1 * Math.PI, 0.9 * Math.PI);
+      ctx.stroke();
+    } else if (isHitting) {
+      // 🎾 NORMAL HIT: Spirited hit wink and athletic exertion smile
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(dir * 2.5, headY - 2);
+      ctx.lineTo(dir * 7.5, headY);
+      ctx.lineTo(dir * 2.5, headY + 2);
+      ctx.stroke();
+
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(dir * 3.5, headY + 5, 3, 0.1 * Math.PI, 0.85 * Math.PI);
+      ctx.stroke();
+    } else if (this.vy < -70) {
+      // 🚀 RISING JUMP: Keen upward gaze with determined smile
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(dir * 5, headY - 1, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(dir * 5, headY - 1.8, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.arc(dir * 3.5, headY + 4.5, 2.8, 0.1 * Math.PI, 0.85 * Math.PI);
+      ctx.stroke();
+    } else {
+      // 🎾 NORMAL PLAY: Athletic focused eye looking forward towards court center
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(dir * 5, headY, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Pupil with crisp reflection glint
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(dir * (5 + (dir > 0 ? 0.8 : -0.8)), headY, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(dir * (5 + (dir > 0 ? 1.2 : -1.2)), headY - 0.6, 0.7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Confident match smile
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(dir * 3.5, headY + 5, 3, 0.1 * Math.PI, 0.85 * Math.PI);
+      ctx.stroke();
+    }
 
     ctx.restore();
   }

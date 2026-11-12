@@ -75,10 +75,11 @@ export class ComputerOpponent {
     const ceilingY = this.config.court.ceilingY;
     const minY = this.config.court.ceilingY + this.player.height / 2;
     const maxY = groundY - this.player.height / 2;
+    const readyY = Math.min(Math.max(this.config.ai.readyHeightY || 340, minY), maxY);
 
-    // 1. If ball is heading towards P1 or not in play
+    // 1. If ball is heading towards P1 or not in play: maintain athletic ready hover
     if (!this.perceivedBall.inPlay || this.perceivedBall.vx <= 0) {
-      this.targetY = maxY;
+      this.targetY = readyY;
       this.timeUntilArrival = 1.5;
       return;
     }
@@ -131,9 +132,8 @@ export class ComputerOpponent {
 
     const arrivalY = simY + errorOffset;
 
-    // ROCKET PHASE: Varied intercept strategies within fair limits
-    // Randomly choose tactical alignment:
-    // 65% sweet spot target, 20% upper lob, 15% lower drive
+    // ROCKET PHASE: Varied tactical intercept strategies
+    // 65% sweet-spot drive, 20% upper lob, 15% lower drive
     const stratRoll = Math.random();
     let strategicOffset = 0;
     if (stratRoll < 0.20) {
@@ -147,7 +147,7 @@ export class ComputerOpponent {
 
   /**
    * Bomb Phase: Forward trajectory prediction across 4-wall bounds
-   * Predicts incoming bomb passes accounting for left and right wall rebounds.
+   * Predicts incoming bomb passes accounting for dynamic side-wall, ceiling, and ground rebounds.
    */
   predictBombTrajectory() {
     const groundY = this.config.court.groundY;
@@ -156,7 +156,7 @@ export class ComputerOpponent {
     const maxX = this.config.court.maxX ?? (this.config.court.width - 10);
     const ballRadius = this.config.ball.radius;
     const ballGravity = this.config.ball.gravity;
-    const arcadeBounce = this.config.ball.arcadeBounceImpulse;
+    const arcadeBounce = this.config.ball.arcadeBounceImpulse * 1.13; // Dynamic bomb bounce factor
     const groundFriction = this.config.ball.groundFriction;
     const minSpeed = this.config.ball.minHorizontalSpeed ?? 300;
 
@@ -165,8 +165,8 @@ export class ComputerOpponent {
 
     const cpuX = this.player.x;
     const racketX = this.player.getRacketX();
-    const dangerLeft = Math.min(racketX, cpuX) - 25;
-    const dangerRight = Math.max(racketX, cpuX) + 25;
+    const dangerLeft = Math.min(racketX, cpuX) - 32;
+    const dangerRight = Math.max(racketX, cpuX) + 32;
 
     let simX = this.perceivedBall.x;
     let simY = this.perceivedBall.y;
@@ -174,12 +174,12 @@ export class ComputerOpponent {
     let simVy = this.perceivedBall.vy;
     let simTime = 0;
     const simDt = 0.015;
-    const maxSimTime = 2.8;
+    const maxSimTime = 3.5;
 
     let predictedArrivalY = null;
     let predictedArrivalTime = 1.0;
 
-    // Check if the bomb is currently already in the danger zone
+    // Check if the bomb is currently already in or immediately adjacent to the danger zone
     if (simX >= dangerLeft && simX <= dangerRight) {
       predictedArrivalY = simY;
       predictedArrivalTime = 0;
@@ -236,17 +236,18 @@ export class ComputerOpponent {
       }
       const arrivalY = predictedArrivalY + errorOffset;
 
-      // Evasive jump strategy:
-      // If bomb arrives low/mid (> 280), jump high to let it pass below!
-      // If bomb arrives high (<= 280), duck down to the floor to let it pass above!
-      if (arrivalY > 280) {
-        const dodgeAltOffset = (Math.random() - 0.5) * 30;
-        this.targetY = Math.max(minY + 20, minY + 40 + dodgeAltOffset);
+      // Dynamic evasive dodge strategy:
+      // If bomb arrives low/mid (> 240), jump high to let it pass safely below!
+      // If bomb arrives high (<= 240), duck down to the floor to let it pass safely above!
+      if (arrivalY > 240) {
+        const dodgeAltOffset = (Math.random() - 0.5) * 20;
+        this.targetY = Math.max(minY + 20, 115 + dodgeAltOffset);
       } else {
         this.targetY = maxY;
       }
     } else {
-      this.targetY = maxY;
+      // If bomb is on P1 side, adopt an agile mid-low ready altitude
+      this.targetY = Math.min(maxY, 360);
     }
   }
 
@@ -259,26 +260,42 @@ export class ComputerOpponent {
     const currentY = this.player.y;
     const currentVy = this.player.vy;
 
-    // If in BOMB phase: actively dodge to reach evasion target altitude
+    // If in BOMB phase: actively dodge to reach evasion target altitude throughout the phase
     if (this.perceivedBall.phase === 'BOMB') {
       const maxY = this.config.court.groundY - this.player.height / 2;
       const wantsToStayHigh = this.targetY < maxY - 60;
 
-      // Proximity emergency avoidance
+      // Proximity emergency avoidance across multi-rebounds
       const cpuX = this.player.x;
       const distToBombX = Math.abs(this.perceivedBall.x - cpuX);
-      const isBombClose = distToBombX < 90;
+      const isBombClose = distToBombX < 130;
 
-      if (wantsToStayHigh || (isBombClose && this.perceivedBall.y > currentY - 20)) {
-        if (currentY > this.targetY + 15 && currentVy >= -120) {
+      // Continuous dodging: climb towards evasion altitude or maintain hover while bomb is near
+      if (wantsToStayHigh) {
+        if (currentY > this.targetY + 10 && currentVy >= -90) {
           this.player.tapJump();
           this.timeSinceLastTap = 0;
+          return;
+        }
+        // Hover maintenance while bomb is in proximity below
+        if (isBombClose && this.perceivedBall.y > 220 && currentVy > 60) {
+          this.player.tapJump();
+          this.timeSinceLastTap = 0;
+          return;
         }
       }
+
+      // Reactive proximity dodge if bomb unexpectedly approaches low or bounces close
+      if (isBombClose && this.perceivedBall.y >= currentY - 20 && currentVy >= -90) {
+        this.player.tapJump();
+        this.timeSinceLastTap = 0;
+        return;
+      }
+
       return;
     }
 
-    // In ROCKET phase: rally intercept
+    // In ROCKET phase: capable and responsive rally intercept
     const groundPlayerY = this.config.court.groundY - (this.player.height / 2);
     const groundCoverY = groundPlayerY - (this.config.racket.totalHeight / 2) - this.config.ball.radius + 6;
     const needsJump = this.targetY < groundCoverY;
@@ -287,15 +304,21 @@ export class ComputerOpponent {
       return; // Ball is low enough that standing on ground intercepts cleanly
     }
 
-    if (this.timeUntilArrival > 0.55) {
-      // Early climb for very high shots
-      if (this.targetY < 280 && currentY > 380 && currentVy >= -100) {
+    if (this.timeUntilArrival > 0.45) {
+      // Early climb for high shots
+      if (this.targetY < 320 && currentY > 350 && currentVy >= -80) {
+        this.player.tapJump();
+        this.timeSinceLastTap = 0;
+      }
+    } else if (this.timeUntilArrival > 0.16) {
+      // Prime intercept window: jump to peak at arrival height
+      if (currentY > this.targetY + 4 && currentVy >= -85) {
         this.player.tapJump();
         this.timeSinceLastTap = 0;
       }
     } else {
-      // Intercept window: jump to peak at arrival height
-      if (currentY > this.targetY + 8 && currentVy >= -100) {
+      // Close range responsive track
+      if (currentY > this.targetY + 2 && currentVy >= -60) {
         this.player.tapJump();
         this.timeSinceLastTap = 0;
       }

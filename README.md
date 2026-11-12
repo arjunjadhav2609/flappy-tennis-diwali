@@ -49,7 +49,8 @@ The racket features a recognizable tennis racket shape with 3 distinct collision
   - Positioned clearly in the open court without obscuring the HUD timer or player positions.
 - **5-Second Sudden-Death Bomb Phase (5s fresh countdown):**
   - Rocket transforms into an explosive **Diwali Bomb** with speed boost and starts a fresh, visible 5-second countdown in the HUD (`💣 BOMB: 5.0s`).
-  - **4-Wall Rebounds:** The bomb bounces off the court’s left and right sides (`minX = 10`, `maxX = 990`) as well as the ceiling and ground boundaries, maintaining active playable momentum throughout.
+  - **Dynamic 4-Wall Rebounds:** The bomb bounces off the court’s left and right sides (`minX = 10`, `maxX = 990`) as well as the ceiling (`ceilingY = 30`) and ground boundaries (`groundY = 520`) with slightly boosted bounce strength (`1.13x` impulse: ~590–640 px/s) and controlled, bounded variation so it doesn't repeat predictable paths. Movement remains fair, readable, strictly speed-capped (`<= 960 px/s`), and within playable court bounds.
+  - **Preserved Rocket Phase Physics:** Normal rocket rallies strictly preserve baseline travel speed (82% ratio), consistent 540 px/s arcade ground/ceiling bounces, and standard racket returns.
   - **Hit-by-Bomb Penalty:** If the bomb touches one player or their racket during the 5 seconds, the point ends immediately and awards 1 point to the opponent.
   - **Both-Survive Scoring:** If the full 5 seconds expire without either player being hit, 1 point is awarded to each player.
   - **Deterministic Collision Resolution:** Collisions occurring on the exact frame the timer reaches zero take precedence over timer expiry, preventing duplicate scoring.
@@ -57,14 +58,33 @@ The racket features a recognizable tennis racket shape with 3 distinct collision
 
 ---
 
-## 🤖 Smarter CPU Opponent
+## 🤖 Smarter & Responsive CPU Opponent
 
-- **Rocket Phase:** Projects arcade trajectory arcs, manages human reaction delay (120ms) and tap cooldowns, and strategically alternates between sweet spot returns, upper lobs, and low drives.
-- **5-Second Bomb Phase & Rebound Adaptation:**
-  - Fully simulates the bomb's path incorporating left/right side-wall rebounds, ceiling rebounds, and ground bounces across actual court bounds.
-  - Calculates timely evasive jumps to dodge incoming bombs, ensuring clearance of both body and racket.
-  - Adapts in real time as the bomb rebounds off back walls and changes direction.
-  - Remains fallible and fair for human opponents through human reaction delay, tap cooldowns, and bounded physical jump physics.
+- **Rocket Phase:** Capable and responsive rally intercept timing, calculating jump apex windows (0.16s–0.45s) to consistently return shots, adopting an alert ready-hover stance (`readyHeightY: 340`) while the ball is on the opponent's side, and tactically alternating between sweet-spot drives, upper lobs, and low drives.
+- **5-Second Bomb Phase & Continuous Evasion:**
+  - Simulates multi-bounce paths incorporating dynamic side-wall rebounds, ceiling rebounds, and ground bounces across actual court bounds up to 3.5s forward.
+  - Adapts to varied bounce deflections in real time and maintains active evasive dodging throughout the full 5-second phase.
+  - High-altitude jumping clears both body and racket on low arrivals, while grounded positioning lets high passes fly safely overhead.
+  - Emergency proximity avoidance reacts immediately to sudden ricochets.
+  - Remains fallible and fun to play against through human reaction latency (120ms), tap cooldowns, and a fair error margin (5%).
+
+---
+
+## 🎨 Polished UI & Expressive Characters
+
+- **Opening Screen:**
+  - Prominent Match Objective banner ("First to 5 Points Wins the Festival Crown!").
+  - Clear Solo vs 2P mode selector with active indicators and `[SOLO]` / `[2-PLAYER]` badges.
+  - Two-phase gameplay walkthrough (Phase 1: 10s Rocket Rally vs Phase 2: 5s Bomb Dodge).
+  - Explicit split controls layout for Player 1 (Sapphire Prince) and Player 2 / CPU (Ruby Champion), plus mobile touch guidance.
+- **Expressive Characters & Distinct Silhouettes:**
+  - **Visual Distinction & Silhouettes:** P1 features an upright royal Kalgi feather plume with azure jewel and sapphire kurta; P2/CPU features a wide regal turban with an emerald peacock aigrette brooch and ruby crimson attire. Silhouettes are unmistakable at any distance.
+  - **Dynamic Facial Expressions:** Eyes and brows dynamically react to gameplay states:
+    - *Bomb Phase:* Alarmed wide eyes, high arched brows, and a stylized tension sweat bead!
+    - *Sweet Spot:* Radiant golden starburst eyes with an expanding impact shockwave ring!
+    - *Hit Impact:* Spirited tennis wink with athletic effort smile.
+    - *Rising Jump:* Upward-tracking focused gaze.
+  - **Movement & Impact Animations:** Athletic squash & stretch launch, smooth forward racket swing with follow-through recoil, and soft landing compression.
 
 ---
 

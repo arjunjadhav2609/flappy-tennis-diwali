@@ -676,8 +676,9 @@ export class TennisGame {
 
     // 2. Draw Players with multi-zone tennis rackets & festive attire + Clean Character HUD
     const p2DisplayName = this.mode === GameMode.PVC ? 'CPU' : 'PLAYER 2';
-    this.p1.draw(this.ctx, this.scoreP1, 'PLAYER 1');
-    this.p2.draw(this.ctx, this.scoreP2, p2DisplayName);
+    const isBomb = this.ball && this.ball.phase === 'BOMB';
+    this.p1.draw(this.ctx, this.scoreP1, 'PLAYER 1', isBomb);
+    this.p2.draw(this.ctx, this.scoreP2, p2DisplayName, isBomb);
 
     // 3. Draw Projectile (Rocket or Sudden-Death Bomb with particles)
     this.ball.draw(this.ctx);

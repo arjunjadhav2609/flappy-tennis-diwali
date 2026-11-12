@@ -916,7 +916,7 @@ class Player {
     return null;
   }
 
-  draw(ctx, score = 0, displayName = null) {
+  draw(ctx, score = 0, displayName = null, isBombPhase = false) {
     const rx = this.getRacketX();
     const groundY = this.config.court.groundY;
 
@@ -935,16 +935,16 @@ class Player {
     // 2. Tennis Racket (Oval Head + Direct Straight Cylindrical Handle)
     this.drawRacket(ctx, rx);
 
-    // 3. Player Character in Festive Diwali Attire
-    this.drawFestiveCharacter(ctx);
+    // 3. Player Character in Festive Diwali Attire & Expressive Silhouette
+    this.drawFestiveCharacter(ctx, isBombPhase);
 
     // 4. Polished overhead character HUD (Role, Score, Power-up Readiness)
-    this.drawCharacterUI(ctx, score, displayName);
+    this.drawCharacterUI(ctx, score, displayName, isBombPhase);
 
     ctx.restore();
   }
 
-  drawCharacterUI(ctx, score, displayName) {
+  drawCharacterUI(ctx, score, displayName, isBombPhase = false) {
     const isP1 = this.id === 'p1';
     const roleText = displayName || (isP1 ? 'PLAYER 1' : 'CPU');
     const isSuperActive = this.hitEffectTimer > 0 && this.hitZoneType === 'SWEET_SPOT';
@@ -973,8 +973,8 @@ class Player {
     ctx.shadowColor = 'transparent';
 
     // Crisp high-contrast outline with player accent color
-    ctx.strokeStyle = isSuperActive ? '#f59e0b' : (isP1 ? '#2563eb' : '#dc2626');
-    ctx.lineWidth = isSuperActive ? 2.2 : 1.6;
+    ctx.strokeStyle = isBombPhase ? '#dc2626' : (isSuperActive ? '#f59e0b' : (isP1 ? '#2563eb' : '#dc2626'));
+    ctx.lineWidth = (isSuperActive || isBombPhase) ? 2.2 : 1.6;
     ctx.stroke();
 
     // Player Role / Name
@@ -999,9 +999,13 @@ class Player {
     ctx.textAlign = 'center';
     ctx.fillText(score.toString(), 19, 0.5);
 
-    // Power-Up Readiness Indicator (⚡READY / ⚡SUPER!)
+    // Power-Up / Phase Indicator (⚡READY / ⚡SUPER! / 💣DODGE!)
     ctx.textAlign = 'right';
-    if (isSuperActive) {
+    if (isBombPhase) {
+      ctx.font = 'bold 8px "Plus Jakarta Sans", system-ui, sans-serif';
+      ctx.fillStyle = '#dc2626';
+      ctx.fillText('💣DODGE', badgeW / 2 - 6, 0);
+    } else if (isSuperActive) {
       ctx.font = 'bold 8.5px "Plus Jakarta Sans", system-ui, sans-serif';
       ctx.fillStyle = '#d97706';
       ctx.fillText('⚡SUPER', badgeW / 2 - 6, 0);
@@ -1022,6 +1026,15 @@ class Player {
 
     ctx.save();
 
+    // Dynamic Racket Swing & Follow-through impact animation
+    if (isHitting) {
+      const swingProgress = this.hitEffectTimer / 0.18;
+      const swingAngle = Math.sin(swingProgress * Math.PI) * (this.isFacingRight ? 0.18 : -0.18);
+      ctx.translate(rx, rb.handle.centerY);
+      ctx.rotate(swingAngle);
+      ctx.translate(-rx, -rb.handle.centerY);
+    }
+
     // Arm connection to handle
     ctx.strokeStyle = '#0f172a'; // Arm outline
     ctx.lineWidth = 6;
@@ -1035,6 +1048,17 @@ class Player {
 
     ctx.strokeStyle = '#fed7aa'; // Arm skin
     ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Sporty wristband
+    const wristColor = this.isFacingRight ? '#2563eb' : '#dc2626';
+    const wristX = armX * 0.35 + rx * 0.65;
+    const wristY = armY * 0.35 + rb.handle.centerY * 0.65;
+    ctx.strokeStyle = wristColor;
+    ctx.lineWidth = 4.5;
+    ctx.beginPath();
+    ctx.moveTo(wristX - 2, wristY - 2);
+    ctx.lineTo(wristX + 2, wristY + 2);
     ctx.stroke();
 
     // 1. Straight Cylindrical Handle (connected directly to bottom of frame, no neck)
@@ -1181,8 +1205,19 @@ class Player {
     ctx.lineWidth = 0.8;
     ctx.stroke();
 
-    // Sweet spot super-shot starburst cue
+    // Sweet spot super-shot starburst cue and expanding impact shockwave ring
     if (isSweetSpotHit) {
+      // Expanding golden impact shockwave ring
+      const progress = 1 - (this.hitEffectTimer / 0.18);
+      const ringRadius = 12 + progress * 24;
+      const ringAlpha = (1 - progress) * 0.75;
+      ctx.strokeStyle = `rgba(245, 158, 11, ${ringAlpha})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(hd.centerX, hd.centerY, ringRadius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Starburst rays
       ctx.strokeStyle = '#f59e0b';
       ctx.lineWidth = 2.2;
       for (let a = 0; a < 8; a++) {
@@ -1197,19 +1232,37 @@ class Player {
     ctx.restore();
   }
 
-  drawFestiveCharacter(ctx) {
+  drawFestiveCharacter(ctx, isBombPhase = false) {
     ctx.save();
     ctx.translate(this.x, this.y);
 
+    const dir = this.isFacingRight ? 1 : -1;
+    const isP1 = this.id === 'p1';
+    const isHitting = this.hitEffectTimer > 0;
+    const isSweetSpotHit = isHitting && this.hitZoneType === 'SWEET_SPOT';
+
+    // Expressive dynamic squash, stretch, and movement tilt
     let scaleX = 1;
     let scaleY = 1;
+    let tiltAngle = 0;
     if (this.jumpSquashTimer > 0) {
-      scaleY = 1.15;
-      scaleX = 0.9;
+      // Crisp athletic launch stretch
+      scaleY = 1.18;
+      scaleX = 0.86;
+      tiltAngle = dir * 0.08;
+    } else if (this.vy < -70) {
+      // Athletic rising posture
+      scaleY = 1.08;
+      scaleX = 0.93;
+      tiltAngle = dir * 0.05;
+    } else if (this.vy > 120) {
+      // Landing / descent compression squash
+      scaleY = 0.91;
+      scaleX = 1.08;
     }
+    ctx.rotate(tiltAngle);
     ctx.scale(scaleX, scaleY);
 
-    const dir = this.isFacingRight ? 1 : -1;
     const halfW = this.width / 2;
     const halfH = this.height / 2;
 
@@ -1228,16 +1281,24 @@ class Player {
     ctx.fillStyle = this.kurtaTrim;
     ctx.fillRect(-halfW + 5, -halfH + 18, this.width - 10, 3.5);
 
-    // Diagonal golden sash with outline
-    ctx.strokeStyle = '#f59e0b';
-    ctx.lineWidth = 3;
+    // Diagonal sash with distinctive character accents
+    ctx.strokeStyle = isP1 ? '#f59e0b' : '#059669'; // Saffron gold for P1, Emerald silk for P2
+    ctx.lineWidth = 3.2;
     ctx.beginPath();
     ctx.moveTo(-halfW + 6, -halfH + 20);
     ctx.lineTo(halfW - 6, 12);
     ctx.stroke();
 
+    // Secondary trim line on sash for royal richness
+    ctx.strokeStyle = isP1 ? '#fde68a' : '#34d399';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-halfW + 7, -halfH + 21);
+    ctx.lineTo(halfW - 7, 11);
+    ctx.stroke();
+
     // 2. Traditional Churidar / Silk Dhoti Pants
-    ctx.fillStyle = '#f8fafc';
+    ctx.fillStyle = isP1 ? '#f8fafc' : '#f1f5f9';
     ctx.fillRect(-halfW + 6, 6, this.width - 12, 12);
     ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = 1.4;
@@ -1250,11 +1311,11 @@ class Player {
     ctx.strokeRect(-8, 18, 5, 12);
     ctx.strokeRect(3, 18, 5, 12);
 
-    // Festive golden mojari / shoes
+    // Festive golden mojari / shoes with curled toe tips
     ctx.fillStyle = this.shoeColor;
     ctx.fillRect(-10, 26, 8, 5);
     ctx.fillRect(2, 26, 8, 5);
-    ctx.fillStyle = '#ea580c';
+    ctx.fillStyle = isP1 ? '#ea580c' : '#991b1b';
     ctx.fillRect(-10, 29, 8, 2);
     ctx.fillRect(2, 29, 8, 2);
     ctx.strokeStyle = '#0f172a';
@@ -1262,7 +1323,7 @@ class Player {
     ctx.strokeRect(-10, 26, 8, 5);
     ctx.strokeRect(2, 26, 8, 5);
 
-    // 3. Head & Festive Turban / Pagri
+    // 3. Head & Distinct Festive Turban / Pagri Silhouettes
     const headY = -halfH + 9;
     ctx.fillStyle = '#fed7aa';
     ctx.beginPath();
@@ -1272,25 +1333,208 @@ class Player {
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Royal Festive Pagri / Turban
+    // Royal Festive Pagri / Turban base
     ctx.fillStyle = this.turbanColor;
     ctx.beginPath();
     ctx.ellipse(0, headY - 4, 13, 7, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Turban Golden Brooch / Kalgi
-    ctx.fillStyle = '#fbbf24';
-    ctx.beginPath();
-    ctx.arc(dir * 5, headY - 8, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    // Distinct character turban ornaments & silhouettes:
+    if (isP1) {
+      // P1: Tall upward-sweeping royal Kalgi feather plume silhouette
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.moveTo(dir * 5, headY - 8);
+      ctx.quadraticCurveTo(dir * 8, headY - 20, dir * 4, headY - 24);
+      ctx.quadraticCurveTo(dir * 1, headY - 16, dir * 4, headY - 8);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
 
-    // Eye looking forward
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath();
-    ctx.arc(dir * 5, headY, 2, 0, Math.PI * 2);
-    ctx.fill();
+      // Secondary feather plume ridge
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.moveTo(dir * 4, headY - 9);
+      ctx.quadraticCurveTo(dir * 6, headY - 18, dir * 3.5, headY - 22);
+      ctx.lineTo(dir * 4, headY - 9);
+      ctx.fill();
+
+      // Plume sapphire gem
+      ctx.fillStyle = '#2563eb';
+      ctx.beginPath();
+      ctx.arc(dir * 5, headY - 8, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    } else {
+      // P2: Flared regal crown with emerald peacock aigrette brooch curved to side
+      ctx.fillStyle = '#059669'; // Emerald aigrette
+      ctx.beginPath();
+      ctx.moveTo(dir * 5, headY - 8);
+      ctx.quadraticCurveTo(dir * 11, headY - 18, dir * 8, headY - 22);
+      ctx.quadraticCurveTo(dir * 3, headY - 16, dir * 4, headY - 8);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Golden aigrette accent
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.moveTo(dir * 4, headY - 9);
+      ctx.quadraticCurveTo(dir * 8, headY - 16, dir * 6, headY - 20);
+      ctx.lineTo(dir * 4, headY - 9);
+      ctx.fill();
+
+      // Ruby brooch cabochon
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.arc(dir * 5, headY - 8, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+
+    // 4. Dynamic Facial Expression: Alarmed Dodge vs Starburst Super vs Hit Wink vs Focused Play
+    if (isBombPhase) {
+      // 💣 BOMB PHASE: High-tension wide alarmed eyes, high arched brow, and panic sweat bead!
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(dir * 5, headY - 1, 4.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+
+      // Dilated alarmed pupil
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(dir * (5 + (dir > 0 ? 0.8 : -0.8)), headY - 1, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // High arched anxious eyebrow
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(dir * 2, headY - 7);
+      ctx.lineTo(dir * 7, headY - 6);
+      ctx.stroke();
+
+      // Stylized panic sweat bead above brow
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(dir * 9, headY - 9, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Tense focused mouth
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(dir * 2, headY + 5);
+      ctx.lineTo(dir * 5, headY + 4);
+      ctx.lineTo(dir * 7, headY + 5.5);
+      ctx.stroke();
+    } else if (isSweetSpotHit) {
+      // ⚡ SWEET SPOT HIT: Radiant starburst glint eye and big victorious athletic smile!
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(dir * 5, headY, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Golden 4-point star in pupil
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      const sx = dir * 5, sy = headY;
+      ctx.moveTo(sx, sy - 3);
+      ctx.lineTo(sx + 1, sy - 1);
+      ctx.lineTo(sx + 3, sy);
+      ctx.lineTo(sx + 1, sy + 1);
+      ctx.lineTo(sx, sy + 3);
+      ctx.lineTo(sx - 1, sy + 1);
+      ctx.lineTo(sx - 3, sy);
+      ctx.lineTo(sx - 1, sy - 1);
+      ctx.closePath();
+      ctx.fill();
+
+      // Radiant smile
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(dir * 3.5, headY + 4.5, 3.5, 0.1 * Math.PI, 0.9 * Math.PI);
+      ctx.stroke();
+    } else if (isHitting) {
+      // 🎾 NORMAL HIT: Spirited hit wink and athletic exertion smile
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(dir * 2.5, headY - 2);
+      ctx.lineTo(dir * 7.5, headY);
+      ctx.lineTo(dir * 2.5, headY + 2);
+      ctx.stroke();
+
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(dir * 3.5, headY + 5, 3, 0.1 * Math.PI, 0.85 * Math.PI);
+      ctx.stroke();
+    } else if (this.vy < -70) {
+      // 🚀 RISING JUMP: Keen upward gaze with determined smile
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(dir * 5, headY - 1, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(dir * 5, headY - 1.8, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.arc(dir * 3.5, headY + 4.5, 2.8, 0.1 * Math.PI, 0.85 * Math.PI);
+      ctx.stroke();
+    } else {
+      // 🎾 NORMAL PLAY: Athletic focused eye looking forward towards court center
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(dir * 5, headY, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Pupil with crisp reflection glint
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(dir * (5 + (dir > 0 ? 0.8 : -0.8)), headY, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(dir * (5 + (dir > 0 ? 1.2 : -1.2)), headY - 0.6, 0.7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Confident match smile
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(dir * 3.5, headY + 5, 3, 0.1 * Math.PI, 0.85 * Math.PI);
+      ctx.stroke();
+    }
 
     ctx.restore();
   }
@@ -1742,6 +1986,8 @@ class Ball {
    * Ground Bounce: Arcade-Style Bouncing (1.5x baseline impulse)
    * Rebounds with consistent upward arcade impulse and bounded micro-variation
    * so bounces feel lively, organic, and completely predictable.
+   * During Bomb phase: slightly increased bounce strength and dynamic bounded variation
+   * prevent repetitive parabolic paths while keeping movement readable, fair, and speed-capped.
    */
   checkGroundBounce() {
     const groundY = this.config.court.groundY;
@@ -1750,22 +1996,35 @@ class Ball {
       this.y = groundY - this.radius;
 
       if (!this.wasGrounded && this.vy > 0) {
-        // 1.5x baseline arcade upward impulse with bounded micro-variation (±2.5%)
-        const variance = 1.0 + (Math.random() - 0.5) * 0.05;
-        let bounceImpulse = this.config.ball.arcadeBounceImpulse * variance;
+        if (this.phase === BallPhase.BOMB) {
+          // Dynamic Bomb ground bounce: slightly increased strength (1.13x) with controlled bounded variation
+          const bombVariance = 1.0 + (Math.random() - 0.5) * 0.08;
+          const bounceImpulse = this.config.ball.arcadeBounceImpulse * 1.13 * bombVariance;
+          this.vy = -bounceImpulse;
 
-        this.vy = -bounceImpulse;
-        this.vx *= this.config.ball.groundFriction;
-        this.wasGrounded = true;
+          // Controlled horizontal variation so bounce paths don't loop into the same predictable arc
+          const vxVariation = (Math.random() - 0.5) * 45;
+          const minSpeed = this.config.ball.minHorizontalSpeed || 300;
+          const maxSpeed = this.config.ball.maxSpeed || 960;
+          const nextVx = Math.sign(this.vx || 1) * (Math.abs(this.vx) * this.config.ball.groundFriction + vxVariation);
+          this.vx = Math.sign(nextVx || 1) * Math.min(maxSpeed, Math.max(minSpeed, Math.abs(nextVx)));
+        } else {
+          // Rocket Phase: strictly preserved 1.5x baseline arcade upward impulse
+          const variance = 1.0 + (Math.random() - 0.5) * 0.05;
+          let bounceImpulse = this.config.ball.arcadeBounceImpulse * variance;
 
-        sound.playBounce(Math.abs(this.vy) / 600);
+          this.vy = -bounceImpulse;
+          this.vx *= this.config.ball.groundFriction;
 
-        // Ensure horizontal momentum never stalls
-        const minSpeed = this.config.ball.minHorizontalSpeed || 360;
-        if (Math.abs(this.vx) < minSpeed && this.vx !== 0) {
-          this.vx = Math.sign(this.vx) * minSpeed;
+          // Ensure horizontal momentum never stalls
+          const minSpeed = this.config.ball.minHorizontalSpeed || 360;
+          if (Math.abs(this.vx) < minSpeed && this.vx !== 0) {
+            this.vx = Math.sign(this.vx) * minSpeed;
+          }
         }
 
+        this.wasGrounded = true;
+        sound.playBounce(Math.abs(this.vy) / 600);
         return { type: 'GROUND_BOUNCE' };
       }
     } else {
@@ -1777,7 +2036,7 @@ class Ball {
 
   /**
    * Ceiling Bounce:
-   * Keeps rocket within screen boundary with 1.5x baseline rebound strength
+   * Keeps projectile within screen boundary with 1.5x baseline rebound strength
    * and deduplicates multi-frame triggers.
    */
   checkCeilingBounce() {
@@ -1787,11 +2046,26 @@ class Ball {
       this.y = ceilingY + this.radius;
 
       if (!this.wasCeilinged && this.vy < 0) {
-        const variance = 1.0 + (Math.random() - 0.5) * 0.04;
-        const impulse = (this.config.ball.ceilingBounceImpulse || this.config.ball.arcadeBounceImpulse) * variance;
-        this.vy = impulse; // Downward rebound with baseline strength
-        this.wasCeilinged = true;
+        if (this.phase === BallPhase.BOMB) {
+          // Dynamic Bomb ceiling bounce: slightly increased strength with bounded variation
+          const bombVariance = 1.0 + (Math.random() - 0.5) * 0.08;
+          const impulse = (this.config.ball.ceilingBounceImpulse || this.config.ball.arcadeBounceImpulse) * 1.12 * bombVariance;
+          this.vy = impulse;
 
+          // Controlled bounded horizontal nudge
+          const minSpeed = this.config.ball.minHorizontalSpeed || 300;
+          const maxSpeed = this.config.ball.maxSpeed || 960;
+          const vxNudge = (Math.random() - 0.5) * 36;
+          const nextVx = Math.sign(this.vx || 1) * (Math.abs(this.vx) + vxNudge);
+          this.vx = Math.sign(nextVx || 1) * Math.min(maxSpeed, Math.max(minSpeed, Math.abs(nextVx)));
+        } else {
+          // Rocket Phase: strictly preserved baseline ceiling rebound
+          const variance = 1.0 + (Math.random() - 0.5) * 0.04;
+          const impulse = (this.config.ball.ceilingBounceImpulse || this.config.ball.arcadeBounceImpulse) * variance;
+          this.vy = impulse;
+        }
+
+        this.wasCeilinged = true;
         sound.playBounce(0.7);
         return { type: 'CEILING_BOUNCE' };
       }
@@ -1804,29 +2078,52 @@ class Ball {
 
   /**
    * Bomb Phase: Side-Wall Bounces
-   * Bomb bounces off the court's left and right sides while keeping a lively playable speed.
+   * Bomb bounces dynamically off the court's left and right sides with controlled bounded
+   * variation and vertical deflection to prevent repeating predictable trajectories,
+   * while strictly capping maximum velocity and preserving playable speed.
    */
   checkSideWallBounces() {
     const minX = this.config.court.minX ?? 10;
     const maxX = this.config.court.maxX ?? (this.config.court.width - 10);
     const minSpeed = this.config.ball.minHorizontalSpeed ?? 300;
+    const maxSpeed = this.config.ball.maxSpeed ?? 960;
 
+    let hitWall = null;
     if (this.x - this.radius <= minX || this.x <= minX) {
       this.x = minX + this.radius;
-      if (this.vx < 0) {
-        this.vx = Math.max(Math.abs(this.vx), minSpeed);
-        sound.playBounce(0.75);
-        this.emitRacketHitSparks(this.x, this.y);
-        return { type: 'WALL_BOUNCE', wall: 'left' };
-      }
+      if (this.vx < 0) hitWall = 'left';
     } else if (this.x + this.radius >= maxX || this.x >= maxX) {
       this.x = maxX - this.radius;
-      if (this.vx > 0) {
-        this.vx = -Math.max(Math.abs(this.vx), minSpeed);
-        sound.playBounce(0.75);
-        this.emitRacketHitSparks(this.x, this.y);
-        return { type: 'WALL_BOUNCE', wall: 'right' };
+      if (this.vx > 0) hitWall = 'right';
+    }
+
+    if (hitWall) {
+      // Dynamic rebound: slightly boosted bounce strength with controlled bounded variation
+      const variance = 1.0 + (Math.random() - 0.5) * 0.08;
+      let reboundVx = Math.max(Math.abs(this.vx) * 1.05 * variance, minSpeed);
+
+      // Controlled vertical deflection so rebounds don't repeat the exact same static path
+      const vyJitter = (Math.random() - 0.5) * 75;
+      this.vy += vyJitter;
+
+      // Prevent flat horizontal skimming: if vertical speed is too small, inject purposeful arc deflection
+      if (Math.abs(this.vy) < 65) {
+        const arcSign = Math.random() > 0.5 ? 1 : -1;
+        this.vy = arcSign * (75 + Math.random() * 45);
       }
+
+      // Cap speed within fair playable bounds
+      const currentSpeed = Math.hypot(reboundVx, this.vy);
+      if (currentSpeed > maxSpeed) {
+        const scale = maxSpeed / currentSpeed;
+        reboundVx *= scale;
+        this.vy *= scale;
+      }
+
+      this.vx = hitWall === 'left' ? reboundVx : -reboundVx;
+      sound.playBounce(0.75);
+      this.emitRacketHitSparks(this.x, this.y);
+      return { type: 'WALL_BOUNCE', wall: hitWall };
     }
 
     return null;
@@ -2193,10 +2490,11 @@ class ComputerOpponent {
     const ceilingY = this.config.court.ceilingY;
     const minY = this.config.court.ceilingY + this.player.height / 2;
     const maxY = groundY - this.player.height / 2;
+    const readyY = Math.min(Math.max(this.config.ai.readyHeightY || 340, minY), maxY);
 
-    // 1. If ball is heading towards P1 or not in play
+    // 1. If ball is heading towards P1 or not in play: maintain athletic ready hover
     if (!this.perceivedBall.inPlay || this.perceivedBall.vx <= 0) {
-      this.targetY = maxY;
+      this.targetY = readyY;
       this.timeUntilArrival = 1.5;
       return;
     }
@@ -2249,9 +2547,8 @@ class ComputerOpponent {
 
     const arrivalY = simY + errorOffset;
 
-    // ROCKET PHASE: Varied intercept strategies within fair limits
-    // Randomly choose tactical alignment:
-    // 65% sweet spot target, 20% upper lob, 15% lower drive
+    // ROCKET PHASE: Varied tactical intercept strategies
+    // 65% sweet-spot drive, 20% upper lob, 15% lower drive
     const stratRoll = Math.random();
     let strategicOffset = 0;
     if (stratRoll < 0.20) {
@@ -2265,7 +2562,7 @@ class ComputerOpponent {
 
   /**
    * Bomb Phase: Forward trajectory prediction across 4-wall bounds
-   * Predicts incoming bomb passes accounting for left and right wall rebounds.
+   * Predicts incoming bomb passes accounting for dynamic side-wall, ceiling, and ground rebounds.
    */
   predictBombTrajectory() {
     const groundY = this.config.court.groundY;
@@ -2274,7 +2571,7 @@ class ComputerOpponent {
     const maxX = this.config.court.maxX ?? (this.config.court.width - 10);
     const ballRadius = this.config.ball.radius;
     const ballGravity = this.config.ball.gravity;
-    const arcadeBounce = this.config.ball.arcadeBounceImpulse;
+    const arcadeBounce = this.config.ball.arcadeBounceImpulse * 1.13; // Dynamic bomb bounce factor
     const groundFriction = this.config.ball.groundFriction;
     const minSpeed = this.config.ball.minHorizontalSpeed ?? 300;
 
@@ -2283,8 +2580,8 @@ class ComputerOpponent {
 
     const cpuX = this.player.x;
     const racketX = this.player.getRacketX();
-    const dangerLeft = Math.min(racketX, cpuX) - 25;
-    const dangerRight = Math.max(racketX, cpuX) + 25;
+    const dangerLeft = Math.min(racketX, cpuX) - 32;
+    const dangerRight = Math.max(racketX, cpuX) + 32;
 
     let simX = this.perceivedBall.x;
     let simY = this.perceivedBall.y;
@@ -2292,12 +2589,12 @@ class ComputerOpponent {
     let simVy = this.perceivedBall.vy;
     let simTime = 0;
     const simDt = 0.015;
-    const maxSimTime = 2.8;
+    const maxSimTime = 3.5;
 
     let predictedArrivalY = null;
     let predictedArrivalTime = 1.0;
 
-    // Check if the bomb is currently already in the danger zone
+    // Check if the bomb is currently already in or immediately adjacent to the danger zone
     if (simX >= dangerLeft && simX <= dangerRight) {
       predictedArrivalY = simY;
       predictedArrivalTime = 0;
@@ -2354,17 +2651,18 @@ class ComputerOpponent {
       }
       const arrivalY = predictedArrivalY + errorOffset;
 
-      // Evasive jump strategy:
-      // If bomb arrives low/mid (> 280), jump high to let it pass below!
-      // If bomb arrives high (<= 280), duck down to the floor to let it pass above!
-      if (arrivalY > 280) {
-        const dodgeAltOffset = (Math.random() - 0.5) * 30;
-        this.targetY = Math.max(minY + 20, minY + 40 + dodgeAltOffset);
+      // Dynamic evasive dodge strategy:
+      // If bomb arrives low/mid (> 240), jump high to let it pass safely below!
+      // If bomb arrives high (<= 240), duck down to the floor to let it pass safely above!
+      if (arrivalY > 240) {
+        const dodgeAltOffset = (Math.random() - 0.5) * 20;
+        this.targetY = Math.max(minY + 20, 115 + dodgeAltOffset);
       } else {
         this.targetY = maxY;
       }
     } else {
-      this.targetY = maxY;
+      // If bomb is on P1 side, adopt an agile mid-low ready altitude
+      this.targetY = Math.min(maxY, 360);
     }
   }
 
@@ -2377,26 +2675,42 @@ class ComputerOpponent {
     const currentY = this.player.y;
     const currentVy = this.player.vy;
 
-    // If in BOMB phase: actively dodge to reach evasion target altitude
+    // If in BOMB phase: actively dodge to reach evasion target altitude throughout the phase
     if (this.perceivedBall.phase === 'BOMB') {
       const maxY = this.config.court.groundY - this.player.height / 2;
       const wantsToStayHigh = this.targetY < maxY - 60;
 
-      // Proximity emergency avoidance
+      // Proximity emergency avoidance across multi-rebounds
       const cpuX = this.player.x;
       const distToBombX = Math.abs(this.perceivedBall.x - cpuX);
-      const isBombClose = distToBombX < 90;
+      const isBombClose = distToBombX < 130;
 
-      if (wantsToStayHigh || (isBombClose && this.perceivedBall.y > currentY - 20)) {
-        if (currentY > this.targetY + 15 && currentVy >= -120) {
+      // Continuous dodging: climb towards evasion altitude or maintain hover while bomb is near
+      if (wantsToStayHigh) {
+        if (currentY > this.targetY + 10 && currentVy >= -90) {
           this.player.tapJump();
           this.timeSinceLastTap = 0;
+          return;
+        }
+        // Hover maintenance while bomb is in proximity below
+        if (isBombClose && this.perceivedBall.y > 220 && currentVy > 60) {
+          this.player.tapJump();
+          this.timeSinceLastTap = 0;
+          return;
         }
       }
+
+      // Reactive proximity dodge if bomb unexpectedly approaches low or bounces close
+      if (isBombClose && this.perceivedBall.y >= currentY - 20 && currentVy >= -90) {
+        this.player.tapJump();
+        this.timeSinceLastTap = 0;
+        return;
+      }
+
       return;
     }
 
-    // In ROCKET phase: rally intercept
+    // In ROCKET phase: capable and responsive rally intercept
     const groundPlayerY = this.config.court.groundY - (this.player.height / 2);
     const groundCoverY = groundPlayerY - (this.config.racket.totalHeight / 2) - this.config.ball.radius + 6;
     const needsJump = this.targetY < groundCoverY;
@@ -2405,15 +2719,21 @@ class ComputerOpponent {
       return; // Ball is low enough that standing on ground intercepts cleanly
     }
 
-    if (this.timeUntilArrival > 0.55) {
-      // Early climb for very high shots
-      if (this.targetY < 280 && currentY > 380 && currentVy >= -100) {
+    if (this.timeUntilArrival > 0.45) {
+      // Early climb for high shots
+      if (this.targetY < 320 && currentY > 350 && currentVy >= -80) {
+        this.player.tapJump();
+        this.timeSinceLastTap = 0;
+      }
+    } else if (this.timeUntilArrival > 0.16) {
+      // Prime intercept window: jump to peak at arrival height
+      if (currentY > this.targetY + 4 && currentVy >= -85) {
         this.player.tapJump();
         this.timeSinceLastTap = 0;
       }
     } else {
-      // Intercept window: jump to peak at arrival height
-      if (currentY > this.targetY + 8 && currentVy >= -100) {
+      // Close range responsive track
+      if (currentY > this.targetY + 2 && currentVy >= -60) {
         this.player.tapJump();
         this.timeSinceLastTap = 0;
       }
@@ -3223,8 +3543,9 @@ class TennisGame {
 
     // 2. Draw Players with multi-zone tennis rackets & festive attire + Clean Character HUD
     const p2DisplayName = this.mode === GameMode.PVC ? 'CPU' : 'PLAYER 2';
-    this.p1.draw(this.ctx, this.scoreP1, 'PLAYER 1');
-    this.p2.draw(this.ctx, this.scoreP2, p2DisplayName);
+    const isBomb = this.ball && this.ball.phase === 'BOMB';
+    this.p1.draw(this.ctx, this.scoreP1, 'PLAYER 1', isBomb);
+    this.p2.draw(this.ctx, this.scoreP2, p2DisplayName, isBomb);
 
     // 3. Draw Projectile (Rocket or Sudden-Death Bomb with particles)
     this.ball.draw(this.ctx);

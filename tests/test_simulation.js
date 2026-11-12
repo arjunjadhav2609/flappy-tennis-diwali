@@ -258,12 +258,17 @@ console.log('--- Starting Diwali & Hot-Potato Tennis Game Tests ---');
   const p2 = new Player('p2', 890, false, config);
   const ai = new ComputerOpponent(p2, config);
 
-  // 1. Rocket phase: CPU calculates target to intercept
+  // 1. Rocket phase: CPU calculates target to intercept and maintains ready stance
   const rocket = new Ball(config);
   rocket.serve('p1', 200, 300);
   ai.perceivedBall = { x: rocket.x, y: rocket.y, vx: rocket.vx, vy: rocket.vy, inPlay: true, phase: BallPhase.ROCKET };
   ai.predictTrajectoryAndTarget();
   assert(ai.targetY > 0 && ai.targetY < config.court.groundY, 'CPU predicts valid intercept height in rocket phase');
+
+  // Verify CPU maintains athletic ready hover stance when ball heads towards P1
+  ai.perceivedBall.vx = -350;
+  ai.predictTrajectoryAndTarget();
+  assert.strictEqual(ai.targetY, config.ai.readyHeightY, 'CPU maintains alert ready hover height while ball is on opponent side');
 
   // 2. Bomb phase: Incoming bomb low -> CPU chooses evasion altitude to dodge!
   const bomb = new Ball(config);
@@ -273,6 +278,7 @@ console.log('--- Starting Diwali & Hot-Potato Tennis Game Tests ---');
   ai.predictTrajectoryAndTarget();
 
   // For a low incoming bomb, CPU target should be high to jump up and dodge!
+  const evasionY = ai.targetY;
   assert(ai.targetY < 200, `CPU must target high altitude to dodge low incoming bomb (targetY=${ai.targetY.toFixed(1)})`);
 
   // 3. Bomb phase multi-rebound prediction: Bomb heading away (vx < 0), will rebound off left wall and return
@@ -284,7 +290,7 @@ console.log('--- Starting Diwali & Hot-Potato Tennis Game Tests ---');
   ai.predictTrajectoryAndTarget();
   assert(ai.targetY !== undefined && ai.targetY > 0, 'CPU projects side-wall rebound path and maintains evasion target');
 
-  console.log(`✓ Smarter CPU actively targeted evasion altitude (${ai.targetY.toFixed(1)}px) and adapted across rebounds! 🪔`);
+  console.log(`✓ Smarter CPU actively targeted evasion altitude (${evasionY.toFixed(1)}px) and adapted across rebounds! 🪔`);
 }
 
 console.log('\nALL 6 DIWALI & HOT-POTATO TEST SUITES PASSED! ✨');

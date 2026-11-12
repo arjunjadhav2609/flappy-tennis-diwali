@@ -443,6 +443,8 @@ export class Ball {
    * Ground Bounce: Arcade-Style Bouncing (1.5x baseline impulse)
    * Rebounds with consistent upward arcade impulse and bounded micro-variation
    * so bounces feel lively, organic, and completely predictable.
+   * During Bomb phase: slightly increased bounce strength and dynamic bounded variation
+   * prevent repetitive parabolic paths while keeping movement readable, fair, and speed-capped.
    */
   checkGroundBounce() {
     const groundY = this.config.court.groundY;
@@ -451,22 +453,35 @@ export class Ball {
       this.y = groundY - this.radius;
 
       if (!this.wasGrounded && this.vy > 0) {
-        // 1.5x baseline arcade upward impulse with bounded micro-variation (±2.5%)
-        const variance = 1.0 + (Math.random() - 0.5) * 0.05;
-        let bounceImpulse = this.config.ball.arcadeBounceImpulse * variance;
+        if (this.phase === BallPhase.BOMB) {
+          // Dynamic Bomb ground bounce: slightly increased strength (1.13x) with controlled bounded variation
+          const bombVariance = 1.0 + (Math.random() - 0.5) * 0.08;
+          const bounceImpulse = this.config.ball.arcadeBounceImpulse * 1.13 * bombVariance;
+          this.vy = -bounceImpulse;
 
-        this.vy = -bounceImpulse;
-        this.vx *= this.config.ball.groundFriction;
-        this.wasGrounded = true;
+          // Controlled horizontal variation so bounce paths don't loop into the same predictable arc
+          const vxVariation = (Math.random() - 0.5) * 45;
+          const minSpeed = this.config.ball.minHorizontalSpeed || 300;
+          const maxSpeed = this.config.ball.maxSpeed || 960;
+          const nextVx = Math.sign(this.vx || 1) * (Math.abs(this.vx) * this.config.ball.groundFriction + vxVariation);
+          this.vx = Math.sign(nextVx || 1) * Math.min(maxSpeed, Math.max(minSpeed, Math.abs(nextVx)));
+        } else {
+          // Rocket Phase: strictly preserved 1.5x baseline arcade upward impulse
+          const variance = 1.0 + (Math.random() - 0.5) * 0.05;
+          let bounceImpulse = this.config.ball.arcadeBounceImpulse * variance;
 
-        sound.playBounce(Math.abs(this.vy) / 600);
+          this.vy = -bounceImpulse;
+          this.vx *= this.config.ball.groundFriction;
 
-        // Ensure horizontal momentum never stalls
-        const minSpeed = this.config.ball.minHorizontalSpeed || 360;
-        if (Math.abs(this.vx) < minSpeed && this.vx !== 0) {
-          this.vx = Math.sign(this.vx) * minSpeed;
+          // Ensure horizontal momentum never stalls
+          const minSpeed = this.config.ball.minHorizontalSpeed || 360;
+          if (Math.abs(this.vx) < minSpeed && this.vx !== 0) {
+            this.vx = Math.sign(this.vx) * minSpeed;
+          }
         }
 
+        this.wasGrounded = true;
+        sound.playBounce(Math.abs(this.vy) / 600);
         return { type: 'GROUND_BOUNCE' };
       }
     } else {
@@ -478,7 +493,7 @@ export class Ball {
 
   /**
    * Ceiling Bounce:
-   * Keeps rocket within screen boundary with 1.5x baseline rebound strength
+   * Keeps projectile within screen boundary with 1.5x baseline rebound strength
    * and deduplicates multi-frame triggers.
    */
   checkCeilingBounce() {
@@ -488,11 +503,26 @@ export class Ball {
       this.y = ceilingY + this.radius;
 
       if (!this.wasCeilinged && this.vy < 0) {
-        const variance = 1.0 + (Math.random() - 0.5) * 0.04;
-        const impulse = (this.config.ball.ceilingBounceImpulse || this.config.ball.arcadeBounceImpulse) * variance;
-        this.vy = impulse; // Downward rebound with baseline strength
-        this.wasCeilinged = true;
+        if (this.phase === BallPhase.BOMB) {
+          // Dynamic Bomb ceiling bounce: slightly increased strength with bounded variation
+          const bombVariance = 1.0 + (Math.random() - 0.5) * 0.08;
+          const impulse = (this.config.ball.ceilingBounceImpulse || this.config.ball.arcadeBounceImpulse) * 1.12 * bombVariance;
+          this.vy = impulse;
 
+          // Controlled bounded horizontal nudge
+          const minSpeed = this.config.ball.minHorizontalSpeed || 300;
+          const maxSpeed = this.config.ball.maxSpeed || 960;
+          const vxNudge = (Math.random() - 0.5) * 36;
+          const nextVx = Math.sign(this.vx || 1) * (Math.abs(this.vx) + vxNudge);
+          this.vx = Math.sign(nextVx || 1) * Math.min(maxSpeed, Math.max(minSpeed, Math.abs(nextVx)));
+        } else {
+          // Rocket Phase: strictly preserved baseline ceiling rebound
+          const variance = 1.0 + (Math.random() - 0.5) * 0.04;
+          const impulse = (this.config.ball.ceilingBounceImpulse || this.config.ball.arcadeBounceImpulse) * variance;
+          this.vy = impulse;
+        }
+
+        this.wasCeilinged = true;
         sound.playBounce(0.7);
         return { type: 'CEILING_BOUNCE' };
       }
@@ -505,29 +535,52 @@ export class Ball {
 
   /**
    * Bomb Phase: Side-Wall Bounces
-   * Bomb bounces off the court's left and right sides while keeping a lively playable speed.
+   * Bomb bounces dynamically off the court's left and right sides with controlled bounded
+   * variation and vertical deflection to prevent repeating predictable trajectories,
+   * while strictly capping maximum velocity and preserving playable speed.
    */
   checkSideWallBounces() {
     const minX = this.config.court.minX ?? 10;
     const maxX = this.config.court.maxX ?? (this.config.court.width - 10);
     const minSpeed = this.config.ball.minHorizontalSpeed ?? 300;
+    const maxSpeed = this.config.ball.maxSpeed ?? 960;
 
+    let hitWall = null;
     if (this.x - this.radius <= minX || this.x <= minX) {
       this.x = minX + this.radius;
-      if (this.vx < 0) {
-        this.vx = Math.max(Math.abs(this.vx), minSpeed);
-        sound.playBounce(0.75);
-        this.emitRacketHitSparks(this.x, this.y);
-        return { type: 'WALL_BOUNCE', wall: 'left' };
-      }
+      if (this.vx < 0) hitWall = 'left';
     } else if (this.x + this.radius >= maxX || this.x >= maxX) {
       this.x = maxX - this.radius;
-      if (this.vx > 0) {
-        this.vx = -Math.max(Math.abs(this.vx), minSpeed);
-        sound.playBounce(0.75);
-        this.emitRacketHitSparks(this.x, this.y);
-        return { type: 'WALL_BOUNCE', wall: 'right' };
+      if (this.vx > 0) hitWall = 'right';
+    }
+
+    if (hitWall) {
+      // Dynamic rebound: slightly boosted bounce strength with controlled bounded variation
+      const variance = 1.0 + (Math.random() - 0.5) * 0.08;
+      let reboundVx = Math.max(Math.abs(this.vx) * 1.05 * variance, minSpeed);
+
+      // Controlled vertical deflection so rebounds don't repeat the exact same static path
+      const vyJitter = (Math.random() - 0.5) * 75;
+      this.vy += vyJitter;
+
+      // Prevent flat horizontal skimming: if vertical speed is too small, inject purposeful arc deflection
+      if (Math.abs(this.vy) < 65) {
+        const arcSign = Math.random() > 0.5 ? 1 : -1;
+        this.vy = arcSign * (75 + Math.random() * 45);
       }
+
+      // Cap speed within fair playable bounds
+      const currentSpeed = Math.hypot(reboundVx, this.vy);
+      if (currentSpeed > maxSpeed) {
+        const scale = maxSpeed / currentSpeed;
+        reboundVx *= scale;
+        this.vy *= scale;
+      }
+
+      this.vx = hitWall === 'left' ? reboundVx : -reboundVx;
+      sound.playBounce(0.75);
+      this.emitRacketHitSparks(this.x, this.y);
+      return { type: 'WALL_BOUNCE', wall: hitWall };
     }
 
     return null;
