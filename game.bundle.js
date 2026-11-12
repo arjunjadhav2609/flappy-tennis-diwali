@@ -66,18 +66,23 @@ const DEFAULT_CONFIG = {
   hotPotato: {
     countdownSeconds: 10.0, // 10-second Rocket rally countdown
     warningThresholdSec: 3.5, // Warning threshold when rocket time is running out
-    bombSpeedMultiplier: 1.45, // Bomb sudden-death speed boost
+    bombSpeedMultiplier: 1.68, // Harder sudden-death speed boost (up from 1.45)
     bombFuseDurationSec: 5.0,  // Fresh 5-second Bomb countdown
     runWarningDurationSec: 1.4,// Duration to display prominent RUN! dodge warning
+    bombBounceMultiplier: 1.25, // Stronger Bomb ground bounce (1.25x = 675 px/s)
+    bombCeilingMultiplier: 1.22, // Stronger Bomb ceiling rebound (1.22x = 660 px/s)
+    bombMinHorizontalSpeed: 380, // Elevated minimum speed so bomb remains brisk & unpredictable
   },
 
   ai: {
-    reactionDelayMs: 120,     // Simulates human visual reaction latency (ms)
-    tapCooldownMs: 180,       // Minimum time between consecutive jumps (ms)
+    reactionDelayMs: 120,     // Simulates human visual reaction latency in Rocket phase (ms)
+    bombReactionDelayMs: 80,  // Sharpened crisis reflex during fast Bomb phase (ms)
+    tapCooldownMs: 180,       // Minimum time between consecutive jumps in Rocket phase (ms)
+    bombTapCooldownMs: 150,   // Agile tap cadence for sustained bomb evasion (ms)
     alignmentTolerance: 20,   // Acceptable vertical distance between racket and ball
     readyHeightY: 340,        // Ready stance hover height while ball is on opponent's side
     mistakeChance: 0.05,      // Small chance to slightly mistime jumps under pressure
-    dodgeBombAggression: 0.85,// Tendency to actively avoid incoming sudden-death bomb
+    dodgeBombAggression: 0.90,// Tendency to actively avoid incoming sudden-death bomb
   },
 
   gameplay: {
@@ -1986,8 +1991,9 @@ class Ball {
    * Ground Bounce: Arcade-Style Bouncing (1.5x baseline impulse)
    * Rebounds with consistent upward arcade impulse and bounded micro-variation
    * so bounces feel lively, organic, and completely predictable.
-   * During Bomb phase: slightly increased bounce strength and dynamic bounded variation
-   * prevent repetitive parabolic paths while keeping movement readable, fair, and speed-capped.
+   * During Bomb phase: noticeably increased bounce strength and speed
+   * so its trajectory changes faster and players have less time to react,
+   * while remaining visible, playable, and strictly speed-capped.
    */
   checkGroundBounce() {
     const groundY = this.config.court.groundY;
@@ -1997,14 +2003,15 @@ class Ball {
 
       if (!this.wasGrounded && this.vy > 0) {
         if (this.phase === BallPhase.BOMB) {
-          // Dynamic Bomb ground bounce: slightly increased strength (1.13x) with controlled bounded variation
+          // Dynamic Bomb ground bounce: noticeably increased strength (1.25x = ~675 px/s) with controlled variation
+          const bombBounceMult = this.config.hotPotato?.bombBounceMultiplier || 1.25;
           const bombVariance = 1.0 + (Math.random() - 0.5) * 0.08;
-          const bounceImpulse = this.config.ball.arcadeBounceImpulse * 1.13 * bombVariance;
+          const bounceImpulse = this.config.ball.arcadeBounceImpulse * bombBounceMult * bombVariance;
           this.vy = -bounceImpulse;
 
-          // Controlled horizontal variation so bounce paths don't loop into the same predictable arc
-          const vxVariation = (Math.random() - 0.5) * 45;
-          const minSpeed = this.config.ball.minHorizontalSpeed || 300;
+          // Controlled horizontal variation with elevated minSpeed
+          const vxVariation = (Math.random() - 0.5) * 55;
+          const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed || 380;
           const maxSpeed = this.config.ball.maxSpeed || 960;
           const nextVx = Math.sign(this.vx || 1) * (Math.abs(this.vx) * this.config.ball.groundFriction + vxVariation);
           this.vx = Math.sign(nextVx || 1) * Math.min(maxSpeed, Math.max(minSpeed, Math.abs(nextVx)));
@@ -2047,15 +2054,16 @@ class Ball {
 
       if (!this.wasCeilinged && this.vy < 0) {
         if (this.phase === BallPhase.BOMB) {
-          // Dynamic Bomb ceiling bounce: slightly increased strength with bounded variation
+          // Dynamic Bomb ceiling bounce: stronger downward rebound (1.22x) with bounded variation
+          const bombCeilMult = this.config.hotPotato?.bombCeilingMultiplier || 1.22;
           const bombVariance = 1.0 + (Math.random() - 0.5) * 0.08;
-          const impulse = (this.config.ball.ceilingBounceImpulse || this.config.ball.arcadeBounceImpulse) * 1.12 * bombVariance;
+          const impulse = (this.config.ball.ceilingBounceImpulse || this.config.ball.arcadeBounceImpulse) * bombCeilMult * bombVariance;
           this.vy = impulse;
 
           // Controlled bounded horizontal nudge
-          const minSpeed = this.config.ball.minHorizontalSpeed || 300;
+          const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed || 380;
           const maxSpeed = this.config.ball.maxSpeed || 960;
-          const vxNudge = (Math.random() - 0.5) * 36;
+          const vxNudge = (Math.random() - 0.5) * 45;
           const nextVx = Math.sign(this.vx || 1) * (Math.abs(this.vx) + vxNudge);
           this.vx = Math.sign(nextVx || 1) * Math.min(maxSpeed, Math.max(minSpeed, Math.abs(nextVx)));
         } else {
@@ -2085,7 +2093,7 @@ class Ball {
   checkSideWallBounces() {
     const minX = this.config.court.minX ?? 10;
     const maxX = this.config.court.maxX ?? (this.config.court.width - 10);
-    const minSpeed = this.config.ball.minHorizontalSpeed ?? 300;
+    const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed ?? 380;
     const maxSpeed = this.config.ball.maxSpeed ?? 960;
 
     let hitWall = null;
@@ -2098,18 +2106,18 @@ class Ball {
     }
 
     if (hitWall) {
-      // Dynamic rebound: slightly boosted bounce strength with controlled bounded variation
+      // Dynamic rebound: noticeably boosted bounce strength with controlled bounded variation
       const variance = 1.0 + (Math.random() - 0.5) * 0.08;
-      let reboundVx = Math.max(Math.abs(this.vx) * 1.05 * variance, minSpeed);
+      let reboundVx = Math.max(Math.abs(this.vx) * 1.08 * variance, minSpeed);
 
       // Controlled vertical deflection so rebounds don't repeat the exact same static path
-      const vyJitter = (Math.random() - 0.5) * 75;
+      const vyJitter = (Math.random() - 0.5) * 90;
       this.vy += vyJitter;
 
       // Prevent flat horizontal skimming: if vertical speed is too small, inject purposeful arc deflection
-      if (Math.abs(this.vy) < 65) {
+      if (Math.abs(this.vy) < 80) {
         const arcSign = Math.random() > 0.5 ? 1 : -1;
-        this.vy = arcSign * (75 + Math.random() * 45);
+        this.vy = arcSign * (90 + Math.random() * 50);
       }
 
       // Cap speed within fair playable bounds
@@ -2450,7 +2458,11 @@ class ComputerOpponent {
     this.timeSinceLastDecision += dt;
     this.timeSinceLastTap += dt;
 
-    const reactionSec = this.config.ai.reactionDelayMs / 1000;
+    const isBomb = (ball && ball.phase === 'BOMB') || this.perceivedBall.phase === 'BOMB';
+    const reactionDelay = isBomb
+      ? (this.config.ai.bombReactionDelayMs || 80)
+      : this.config.ai.reactionDelayMs;
+    const reactionSec = reactionDelay / 1000;
 
     // Snapshot ball state at human reaction interval
     if (this.timeSinceLastDecision >= reactionSec) {
@@ -2571,24 +2583,25 @@ class ComputerOpponent {
     const maxX = this.config.court.maxX ?? (this.config.court.width - 10);
     const ballRadius = this.config.ball.radius;
     const ballGravity = this.config.ball.gravity;
-    const arcadeBounce = this.config.ball.arcadeBounceImpulse * 1.13; // Dynamic bomb bounce factor
+    const bombBounceMult = this.config.hotPotato?.bombBounceMultiplier || 1.25;
+    const arcadeBounce = this.config.ball.arcadeBounceImpulse * bombBounceMult; // Faster bomb bounce factor
     const groundFriction = this.config.ball.groundFriction;
-    const minSpeed = this.config.ball.minHorizontalSpeed ?? 300;
+    const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed ?? 380;
 
     const minY = ceilingY + this.player.height / 2;
     const maxY = groundY - this.player.height / 2;
 
     const cpuX = this.player.x;
     const racketX = this.player.getRacketX();
-    const dangerLeft = Math.min(racketX, cpuX) - 32;
-    const dangerRight = Math.max(racketX, cpuX) + 32;
+    const dangerLeft = Math.min(racketX, cpuX) - 36;
+    const dangerRight = Math.max(racketX, cpuX) + 36;
 
     let simX = this.perceivedBall.x;
     let simY = this.perceivedBall.y;
     let simVx = this.perceivedBall.vx;
     let simVy = this.perceivedBall.vy;
     let simTime = 0;
-    const simDt = 0.015;
+    const simDt = 0.008; // High frequency step for faster bomb velocities
     const maxSimTime = 3.5;
 
     let predictedArrivalY = null;
@@ -2651,23 +2664,24 @@ class ComputerOpponent {
       }
       const arrivalY = predictedArrivalY + errorOffset;
 
-      // Dynamic evasive dodge strategy:
-      // If bomb arrives low/mid (> 240), jump high to let it pass safely below!
-      // If bomb arrives high (<= 240), duck down to the floor to let it pass safely above!
-      if (arrivalY > 240) {
-        const dodgeAltOffset = (Math.random() - 0.5) * 20;
-        this.targetY = Math.max(minY + 20, 115 + dodgeAltOffset);
+      // Dynamic evasive dodge strategy for faster, stronger bomb bounces:
+      // If bomb arrives low/mid (> 210), jump high to clear the higher bounce!
+      // If bomb arrives high (<= 210), duck down to the floor to let it pass safely above!
+      if (arrivalY > 210) {
+        const dodgeAltOffset = (Math.random() - 0.5) * 16;
+        this.targetY = Math.max(minY + 15, 100 + dodgeAltOffset);
       } else {
         this.targetY = maxY;
       }
     } else {
       // If bomb is on P1 side, adopt an agile mid-low ready altitude
-      this.targetY = Math.min(maxY, 360);
+      this.targetY = Math.min(maxY, 350);
     }
   }
 
   evaluateTapAction() {
-    const tapCooldownSec = this.config.ai.tapCooldownMs / 1000;
+    const isBomb = this.perceivedBall.phase === 'BOMB';
+    const tapCooldownSec = (isBomb ? (this.config.ai.bombTapCooldownMs || 150) : this.config.ai.tapCooldownMs) / 1000;
     if (this.timeSinceLastTap < tapCooldownSec) {
       return;
     }
@@ -2676,24 +2690,24 @@ class ComputerOpponent {
     const currentVy = this.player.vy;
 
     // If in BOMB phase: actively dodge to reach evasion target altitude throughout the phase
-    if (this.perceivedBall.phase === 'BOMB') {
+    if (isBomb) {
       const maxY = this.config.court.groundY - this.player.height / 2;
       const wantsToStayHigh = this.targetY < maxY - 60;
 
       // Proximity emergency avoidance across multi-rebounds
       const cpuX = this.player.x;
       const distToBombX = Math.abs(this.perceivedBall.x - cpuX);
-      const isBombClose = distToBombX < 130;
+      const isBombClose = distToBombX < 145;
 
       // Continuous dodging: climb towards evasion altitude or maintain hover while bomb is near
       if (wantsToStayHigh) {
-        if (currentY > this.targetY + 10 && currentVy >= -90) {
+        if (currentY > this.targetY + 8 && currentVy >= -85) {
           this.player.tapJump();
           this.timeSinceLastTap = 0;
           return;
         }
-        // Hover maintenance while bomb is in proximity below
-        if (isBombClose && this.perceivedBall.y > 220 && currentVy > 60) {
+        // Hover maintenance while faster bomb is in proximity below
+        if (isBombClose && this.perceivedBall.y > 190 && currentVy > 40) {
           this.player.tapJump();
           this.timeSinceLastTap = 0;
           return;
@@ -2701,7 +2715,7 @@ class ComputerOpponent {
       }
 
       // Reactive proximity dodge if bomb unexpectedly approaches low or bounces close
-      if (isBombClose && this.perceivedBall.y >= currentY - 20 && currentVy >= -90) {
+      if (isBombClose && this.perceivedBall.y >= currentY - 25 && currentVy >= -85) {
         this.player.tapJump();
         this.timeSinceLastTap = 0;
         return;

@@ -290,7 +290,12 @@ console.log('--- Starting Diwali & Hot-Potato Tennis Game Tests ---');
   ai.predictTrajectoryAndTarget();
   assert(ai.targetY !== undefined && ai.targetY > 0, 'CPU projects side-wall rebound path and maintains evasion target');
 
-  console.log(`✓ Smarter CPU actively targeted evasion altitude (${evasionY.toFixed(1)}px) and adapted across rebounds! 🪔`);
+  // 4. Harder Bomb Phase parameters & CPU reaction tuning
+  assert(config.hotPotato.bombBounceMultiplier >= 1.20, 'Bomb bounce strength must be noticeably boosted (>= 1.20x)');
+  assert(config.hotPotato.bombSpeedMultiplier >= 1.60, 'Bomb speed boost must be noticeably higher (>= 1.60x)');
+  assert.strictEqual(config.ai.bombReactionDelayMs, 80, 'CPU crisis reaction delay tuned to 80ms for faster bomb evasion');
+
+  console.log(`✓ Smarter CPU actively targeted evasion altitude (${evasionY.toFixed(1)}px), adapted across rebounds, and used sharpened crisis reflexes! 🪔`);
 }
 
 console.log('\nALL 6 DIWALI & HOT-POTATO TEST SUITES PASSED! ✨');

@@ -80,7 +80,7 @@ console.log('--- Running Rocket Speed, Bounce Consistency & Explosive Phase Test
   assert(Math.abs(rocket.vy) >= 500 && Math.abs(rocket.vy) <= 570,
     `Rocket bounce must stay strictly around 540 px/s (actual: ${Math.abs(rocket.vy).toFixed(1)})`);
 
-  // Test Bomb ground bounce: slightly increased dynamic impulse (> 560 px/s)
+  // Test Bomb ground bounce: noticeably increased dynamic impulse (> 620 px/s)
   const bomb = new Ball(config);
   bomb.phase = BallPhase.BOMB;
   bomb.y = config.court.groundY - bomb.radius;
@@ -88,8 +88,8 @@ console.log('--- Running Rocket Speed, Bounce Consistency & Explosive Phase Test
   bomb.vx = 350;
   bomb.checkGroundBounce();
   const bombGroundVy = Math.abs(bomb.vy);
-  assert(bombGroundVy >= 560,
-    `Bomb phase must have slightly increased dynamic bounce strength (actual: ${bombGroundVy.toFixed(1)})`);
+  assert(bombGroundVy >= 620,
+    `Bomb phase must have noticeably increased bounce strength (actual: ${bombGroundVy.toFixed(1)})`);
 
   // Test speed cap on wall rebound
   bomb.x = config.court.maxX;
@@ -120,9 +120,9 @@ console.log('--- Running Rocket Speed, Bounce Consistency & Explosive Phase Test
   const allIdentical = reboundSamples.every(s => s.vy === reboundSamples[0].vy && s.vx === reboundSamples[0].vx);
   assert(!allIdentical, 'Bomb rebounds must exhibit controlled variation rather than static repetitive values');
 
-  // Verify bounded limits
+  // Verify bounded limits for harder, faster bounces
   for (const s of reboundSamples) {
-    assert(Math.abs(s.vy) >= 560 && Math.abs(s.vy) <= 660, 'Rebound vy within dynamic boosted limits');
+    assert(Math.abs(s.vy) >= 620 && Math.abs(s.vy) <= 730, `Rebound vy (${Math.abs(s.vy).toFixed(1)}) within dynamic boosted limits`);
     assert(Math.abs(s.vx) >= 300 && Math.abs(s.vx) <= config.ball.maxSpeed, 'Rebound vx within playable speed limits');
   }
 

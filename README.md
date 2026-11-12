@@ -47,10 +47,11 @@ The racket features a recognizable tennis racket shape with 3 distinct collision
 - **Prominent “RUN!” Warning:**
   - When the 10-second countdown ends, a prominent **“RUN!”** warning banner appears in red highlights alerting both players to dodge.
   - Positioned clearly in the open court without obscuring the HUD timer or player positions.
-- **5-Second Sudden-Death Bomb Phase (5s fresh countdown):**
-  - Rocket transforms into an explosive **Diwali Bomb** with speed boost and starts a fresh, visible 5-second countdown in the HUD (`💣 BOMB: 5.0s`).
-  - **Dynamic 4-Wall Rebounds:** The bomb bounces off the court’s left and right sides (`minX = 10`, `maxX = 990`) as well as the ceiling (`ceilingY = 30`) and ground boundaries (`groundY = 520`) with slightly boosted bounce strength (`1.13x` impulse: ~590–640 px/s) and controlled, bounded variation so it doesn't repeat predictable paths. Movement remains fair, readable, strictly speed-capped (`<= 960 px/s`), and within playable court bounds.
-  - **Preserved Rocket Phase Physics:** Normal rocket rallies strictly preserve baseline travel speed (82% ratio), consistent 540 px/s arcade ground/ceiling bounces, and standard racket returns.
+- **5-Second Sudden-Death Bomb Phase (5s fresh countdown - Noticeably Harder):**
+  - Rocket transforms into an explosive **Diwali Bomb** with a significant sudden-death speed boost (`1.68x` speed multiplier) and begins a fresh, visible 5-second countdown in the HUD (`💣 BOMB: 5.0s`).
+  - **Noticeably Stronger & Faster Bounces:** Ground impacts apply an increased bounce strength (`1.25x` baseline impulse: ~650–705 px/s), ceiling rebounds kick down with `1.22x` force (~660 px/s), and minimum horizontal speed is elevated to `380 px/s`. Bounces feature dynamic bounded variation so its trajectory changes much faster and players have substantially less time to react.
+  - **Visible, Playable & Speed-Capped:** The bomb's maximum velocity is strictly capped at `960 px/s` within court bounds (`minX = 10`, `maxX = 990`, `ceilingY = 30`, `groundY = 520`), ensuring high-speed thrill without visual tunneling or unreadable chaos.
+  - **Preserved Rocket Phase Physics & Timers:** Normal rocket rallies strictly preserve baseline travel speed (82% ratio), consistent 540 px/s arcade ground/ceiling bounces, standard racket returns, 10s Rocket countdown, 5s Bomb countdown, and original scoring rules.
   - **Hit-by-Bomb Penalty:** If the bomb touches one player or their racket during the 5 seconds, the point ends immediately and awards 1 point to the opponent.
   - **Both-Survive Scoring:** If the full 5 seconds expire without either player being hit, 1 point is awarded to each player.
   - **Deterministic Collision Resolution:** Collisions occurring on the exact frame the timer reaches zero take precedence over timer expiry, preventing duplicate scoring.
@@ -61,12 +62,12 @@ The racket features a recognizable tennis racket shape with 3 distinct collision
 ## 🤖 Smarter & Responsive CPU Opponent
 
 - **Rocket Phase:** Capable and responsive rally intercept timing, calculating jump apex windows (0.16s–0.45s) to consistently return shots, adopting an alert ready-hover stance (`readyHeightY: 340`) while the ball is on the opponent's side, and tactically alternating between sweet-spot drives, upper lobs, and low drives.
-- **5-Second Bomb Phase & Continuous Evasion:**
-  - Simulates multi-bounce paths incorporating dynamic side-wall rebounds, ceiling rebounds, and ground bounces across actual court bounds up to 3.5s forward.
-  - Adapts to varied bounce deflections in real time and maintains active evasive dodging throughout the full 5-second phase.
-  - High-altitude jumping clears both body and racket on low arrivals, while grounded positioning lets high passes fly safely overhead.
-  - Emergency proximity avoidance reacts immediately to sudden ricochets.
-  - Remains fallible and fun to play against through human reaction latency (120ms), tap cooldowns, and a fair error margin (5%).
+- **5-Second Harder Bomb Phase & Continuous Evasion:**
+  - Forward-simulates high-frequency trajectories (`simDt = 8ms`) incorporating stronger `1.25x` ground bounces and dynamic wall ricochets up to 3.5s forward.
+  - Utilizes sharpened crisis reflexes (`bombReactionDelayMs = 80ms`) and agile tap cadences (`bombTapCooldownMs = 150ms`) to dodge the faster bomb.
+  - Elevated high-altitude evasion (`targetY = 100`) clears the bomb's higher vertical arc, while grounded positioning lets high passes fly safely overhead.
+  - Emergency proximity avoidance reacts swiftly to sudden baseline ricochets.
+  - Remains beatable and fun: CPU is governed by standard player jump impulse and gravity, and an occasional mistiming margin (5%) keeps human players capable of winning sudden-death points through smart positioning.
 
 ---
 

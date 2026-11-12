@@ -62,18 +62,23 @@ export const DEFAULT_CONFIG = {
   hotPotato: {
     countdownSeconds: 10.0, // 10-second Rocket rally countdown
     warningThresholdSec: 3.5, // Warning threshold when rocket time is running out
-    bombSpeedMultiplier: 1.45, // Bomb sudden-death speed boost
+    bombSpeedMultiplier: 1.68, // Harder sudden-death speed boost (up from 1.45)
     bombFuseDurationSec: 5.0,  // Fresh 5-second Bomb countdown
     runWarningDurationSec: 1.4,// Duration to display prominent RUN! dodge warning
+    bombBounceMultiplier: 1.25, // Stronger Bomb ground bounce (1.25x = 675 px/s)
+    bombCeilingMultiplier: 1.22, // Stronger Bomb ceiling rebound (1.22x = 660 px/s)
+    bombMinHorizontalSpeed: 380, // Elevated minimum speed so bomb remains brisk & unpredictable
   },
 
   ai: {
-    reactionDelayMs: 120,     // Simulates human visual reaction latency (ms)
-    tapCooldownMs: 180,       // Minimum time between consecutive jumps (ms)
+    reactionDelayMs: 120,     // Simulates human visual reaction latency in Rocket phase (ms)
+    bombReactionDelayMs: 80,  // Sharpened crisis reflex during fast Bomb phase (ms)
+    tapCooldownMs: 180,       // Minimum time between consecutive jumps in Rocket phase (ms)
+    bombTapCooldownMs: 150,   // Agile tap cadence for sustained bomb evasion (ms)
     alignmentTolerance: 20,   // Acceptable vertical distance between racket and ball
     readyHeightY: 340,        // Ready stance hover height while ball is on opponent's side
     mistakeChance: 0.05,      // Small chance to slightly mistime jumps under pressure
-    dodgeBombAggression: 0.85,// Tendency to actively avoid incoming sudden-death bomb
+    dodgeBombAggression: 0.90,// Tendency to actively avoid incoming sudden-death bomb
   },
 
   gameplay: {

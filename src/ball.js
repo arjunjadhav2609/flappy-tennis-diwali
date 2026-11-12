@@ -443,8 +443,9 @@ export class Ball {
    * Ground Bounce: Arcade-Style Bouncing (1.5x baseline impulse)
    * Rebounds with consistent upward arcade impulse and bounded micro-variation
    * so bounces feel lively, organic, and completely predictable.
-   * During Bomb phase: slightly increased bounce strength and dynamic bounded variation
-   * prevent repetitive parabolic paths while keeping movement readable, fair, and speed-capped.
+   * During Bomb phase: noticeably increased bounce strength and speed
+   * so its trajectory changes faster and players have less time to react,
+   * while remaining visible, playable, and strictly speed-capped.
    */
   checkGroundBounce() {
     const groundY = this.config.court.groundY;
@@ -454,14 +455,15 @@ export class Ball {
 
       if (!this.wasGrounded && this.vy > 0) {
         if (this.phase === BallPhase.BOMB) {
-          // Dynamic Bomb ground bounce: slightly increased strength (1.13x) with controlled bounded variation
+          // Dynamic Bomb ground bounce: noticeably increased strength (1.25x = ~675 px/s) with controlled variation
+          const bombBounceMult = this.config.hotPotato?.bombBounceMultiplier || 1.25;
           const bombVariance = 1.0 + (Math.random() - 0.5) * 0.08;
-          const bounceImpulse = this.config.ball.arcadeBounceImpulse * 1.13 * bombVariance;
+          const bounceImpulse = this.config.ball.arcadeBounceImpulse * bombBounceMult * bombVariance;
           this.vy = -bounceImpulse;
 
-          // Controlled horizontal variation so bounce paths don't loop into the same predictable arc
-          const vxVariation = (Math.random() - 0.5) * 45;
-          const minSpeed = this.config.ball.minHorizontalSpeed || 300;
+          // Controlled horizontal variation with elevated minSpeed
+          const vxVariation = (Math.random() - 0.5) * 55;
+          const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed || 380;
           const maxSpeed = this.config.ball.maxSpeed || 960;
           const nextVx = Math.sign(this.vx || 1) * (Math.abs(this.vx) * this.config.ball.groundFriction + vxVariation);
           this.vx = Math.sign(nextVx || 1) * Math.min(maxSpeed, Math.max(minSpeed, Math.abs(nextVx)));
@@ -504,15 +506,16 @@ export class Ball {
 
       if (!this.wasCeilinged && this.vy < 0) {
         if (this.phase === BallPhase.BOMB) {
-          // Dynamic Bomb ceiling bounce: slightly increased strength with bounded variation
+          // Dynamic Bomb ceiling bounce: stronger downward rebound (1.22x) with bounded variation
+          const bombCeilMult = this.config.hotPotato?.bombCeilingMultiplier || 1.22;
           const bombVariance = 1.0 + (Math.random() - 0.5) * 0.08;
-          const impulse = (this.config.ball.ceilingBounceImpulse || this.config.ball.arcadeBounceImpulse) * 1.12 * bombVariance;
+          const impulse = (this.config.ball.ceilingBounceImpulse || this.config.ball.arcadeBounceImpulse) * bombCeilMult * bombVariance;
           this.vy = impulse;
 
           // Controlled bounded horizontal nudge
-          const minSpeed = this.config.ball.minHorizontalSpeed || 300;
+          const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed || 380;
           const maxSpeed = this.config.ball.maxSpeed || 960;
-          const vxNudge = (Math.random() - 0.5) * 36;
+          const vxNudge = (Math.random() - 0.5) * 45;
           const nextVx = Math.sign(this.vx || 1) * (Math.abs(this.vx) + vxNudge);
           this.vx = Math.sign(nextVx || 1) * Math.min(maxSpeed, Math.max(minSpeed, Math.abs(nextVx)));
         } else {
@@ -542,7 +545,7 @@ export class Ball {
   checkSideWallBounces() {
     const minX = this.config.court.minX ?? 10;
     const maxX = this.config.court.maxX ?? (this.config.court.width - 10);
-    const minSpeed = this.config.ball.minHorizontalSpeed ?? 300;
+    const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed ?? 380;
     const maxSpeed = this.config.ball.maxSpeed ?? 960;
 
     let hitWall = null;
@@ -555,18 +558,18 @@ export class Ball {
     }
 
     if (hitWall) {
-      // Dynamic rebound: slightly boosted bounce strength with controlled bounded variation
+      // Dynamic rebound: noticeably boosted bounce strength with controlled bounded variation
       const variance = 1.0 + (Math.random() - 0.5) * 0.08;
-      let reboundVx = Math.max(Math.abs(this.vx) * 1.05 * variance, minSpeed);
+      let reboundVx = Math.max(Math.abs(this.vx) * 1.08 * variance, minSpeed);
 
       // Controlled vertical deflection so rebounds don't repeat the exact same static path
-      const vyJitter = (Math.random() - 0.5) * 75;
+      const vyJitter = (Math.random() - 0.5) * 90;
       this.vy += vyJitter;
 
       // Prevent flat horizontal skimming: if vertical speed is too small, inject purposeful arc deflection
-      if (Math.abs(this.vy) < 65) {
+      if (Math.abs(this.vy) < 80) {
         const arcSign = Math.random() > 0.5 ? 1 : -1;
-        this.vy = arcSign * (75 + Math.random() * 45);
+        this.vy = arcSign * (90 + Math.random() * 50);
       }
 
       // Cap speed within fair playable bounds

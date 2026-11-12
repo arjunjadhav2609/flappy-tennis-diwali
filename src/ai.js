@@ -35,7 +35,11 @@ export class ComputerOpponent {
     this.timeSinceLastDecision += dt;
     this.timeSinceLastTap += dt;
 
-    const reactionSec = this.config.ai.reactionDelayMs / 1000;
+    const isBomb = (ball && ball.phase === 'BOMB') || this.perceivedBall.phase === 'BOMB';
+    const reactionDelay = isBomb
+      ? (this.config.ai.bombReactionDelayMs || 80)
+      : this.config.ai.reactionDelayMs;
+    const reactionSec = reactionDelay / 1000;
 
     // Snapshot ball state at human reaction interval
     if (this.timeSinceLastDecision >= reactionSec) {
@@ -156,24 +160,25 @@ export class ComputerOpponent {
     const maxX = this.config.court.maxX ?? (this.config.court.width - 10);
     const ballRadius = this.config.ball.radius;
     const ballGravity = this.config.ball.gravity;
-    const arcadeBounce = this.config.ball.arcadeBounceImpulse * 1.13; // Dynamic bomb bounce factor
+    const bombBounceMult = this.config.hotPotato?.bombBounceMultiplier || 1.25;
+    const arcadeBounce = this.config.ball.arcadeBounceImpulse * bombBounceMult; // Faster bomb bounce factor
     const groundFriction = this.config.ball.groundFriction;
-    const minSpeed = this.config.ball.minHorizontalSpeed ?? 300;
+    const minSpeed = this.config.hotPotato?.bombMinHorizontalSpeed ?? 380;
 
     const minY = ceilingY + this.player.height / 2;
     const maxY = groundY - this.player.height / 2;
 
     const cpuX = this.player.x;
     const racketX = this.player.getRacketX();
-    const dangerLeft = Math.min(racketX, cpuX) - 32;
-    const dangerRight = Math.max(racketX, cpuX) + 32;
+    const dangerLeft = Math.min(racketX, cpuX) - 36;
+    const dangerRight = Math.max(racketX, cpuX) + 36;
 
     let simX = this.perceivedBall.x;
     let simY = this.perceivedBall.y;
     let simVx = this.perceivedBall.vx;
     let simVy = this.perceivedBall.vy;
     let simTime = 0;
-    const simDt = 0.015;
+    const simDt = 0.008; // High frequency step for faster bomb velocities
     const maxSimTime = 3.5;
 
     let predictedArrivalY = null;
@@ -236,23 +241,24 @@ export class ComputerOpponent {
       }
       const arrivalY = predictedArrivalY + errorOffset;
 
-      // Dynamic evasive dodge strategy:
-      // If bomb arrives low/mid (> 240), jump high to let it pass safely below!
-      // If bomb arrives high (<= 240), duck down to the floor to let it pass safely above!
-      if (arrivalY > 240) {
-        const dodgeAltOffset = (Math.random() - 0.5) * 20;
-        this.targetY = Math.max(minY + 20, 115 + dodgeAltOffset);
+      // Dynamic evasive dodge strategy for faster, stronger bomb bounces:
+      // If bomb arrives low/mid (> 210), jump high to clear the higher bounce!
+      // If bomb arrives high (<= 210), duck down to the floor to let it pass safely above!
+      if (arrivalY > 210) {
+        const dodgeAltOffset = (Math.random() - 0.5) * 16;
+        this.targetY = Math.max(minY + 15, 100 + dodgeAltOffset);
       } else {
         this.targetY = maxY;
       }
     } else {
       // If bomb is on P1 side, adopt an agile mid-low ready altitude
-      this.targetY = Math.min(maxY, 360);
+      this.targetY = Math.min(maxY, 350);
     }
   }
 
   evaluateTapAction() {
-    const tapCooldownSec = this.config.ai.tapCooldownMs / 1000;
+    const isBomb = this.perceivedBall.phase === 'BOMB';
+    const tapCooldownSec = (isBomb ? (this.config.ai.bombTapCooldownMs || 150) : this.config.ai.tapCooldownMs) / 1000;
     if (this.timeSinceLastTap < tapCooldownSec) {
       return;
     }
@@ -261,24 +267,24 @@ export class ComputerOpponent {
     const currentVy = this.player.vy;
 
     // If in BOMB phase: actively dodge to reach evasion target altitude throughout the phase
-    if (this.perceivedBall.phase === 'BOMB') {
+    if (isBomb) {
       const maxY = this.config.court.groundY - this.player.height / 2;
       const wantsToStayHigh = this.targetY < maxY - 60;
 
       // Proximity emergency avoidance across multi-rebounds
       const cpuX = this.player.x;
       const distToBombX = Math.abs(this.perceivedBall.x - cpuX);
-      const isBombClose = distToBombX < 130;
+      const isBombClose = distToBombX < 145;
 
       // Continuous dodging: climb towards evasion altitude or maintain hover while bomb is near
       if (wantsToStayHigh) {
-        if (currentY > this.targetY + 10 && currentVy >= -90) {
+        if (currentY > this.targetY + 8 && currentVy >= -85) {
           this.player.tapJump();
           this.timeSinceLastTap = 0;
           return;
         }
-        // Hover maintenance while bomb is in proximity below
-        if (isBombClose && this.perceivedBall.y > 220 && currentVy > 60) {
+        // Hover maintenance while faster bomb is in proximity below
+        if (isBombClose && this.perceivedBall.y > 190 && currentVy > 40) {
           this.player.tapJump();
           this.timeSinceLastTap = 0;
           return;
@@ -286,7 +292,7 @@ export class ComputerOpponent {
       }
 
       // Reactive proximity dodge if bomb unexpectedly approaches low or bounces close
-      if (isBombClose && this.perceivedBall.y >= currentY - 20 && currentVy >= -90) {
+      if (isBombClose && this.perceivedBall.y >= currentY - 25 && currentVy >= -85) {
         this.player.tapJump();
         this.timeSinceLastTap = 0;
         return;
